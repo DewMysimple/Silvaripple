@@ -1,0 +1,9 @@
+silk-wasm 3.7.1
+Copyright (c) idranme and contributors
+Source: https://github.com/idranme/silk-wasm
+License: MIT, reproduced in LICENSE.
+
+ChatWechat invokes the vendored JavaScript/Emscripten wrapper in a short-lived local
+Node.js process. No network access is performed. The original package SHA-512
+integrity prefix published by npm is mXPwLRtZxrYV3; the vendored wasm size is 234626 bytes.
+Vendored silk.wasm SHA-256: 88152af59af535b8056ac806710824b2259a361027451b494f175f48fb39c807

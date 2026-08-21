@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+frontend/node_modules/
+frontend/.vite/
+*.tsbuildinfo
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
