@@ -14,6 +14,7 @@ supersedes: null
 | 时间 | 类型 | 目标 | 状态 | 主题 | 日志 |
 | --- | --- | --- | --- | --- | --- |
 | 2026-08-24 | maintenance | 移除根目录启动脚本，统一源码入口，并把本地安装版产物收回工程内；不再保留便携交付物。 | archived | repository-layout-and-artifacts | [[日志/2026-08-24-工程目录与发布产物整理|2026-08-24｜工程目录与发布产物整理]] |
+| 2026-08-24 | maintenance | - | archived | readme-positioning | [[日志/2026-08-24-README产品定位措辞调整|README 产品定位措辞调整]] |
 | 2026-08-24 | maintenance | - | archived | in-repository-installed-artifacts | [[日志/2026-08-24-工程内安装实例与发布资产收敛|2026-08-24｜工程内安装实例与发布资产收敛]] |
 | 2026-08-24 | architecture | 把用户交付从免安装目录改为当前用户 NSIS 安装包，同时保持 Python、React、pywebview 的可维护架构。 | archived | formal-windows-installer | [[日志/2026-08-24-正式安装版构建体系|2026-08-24｜正式安装版构建体系]] |
 | 2026-08-23 | maintenance | 根据现有代码、测试与已确认需求建立可信工程基线和持久记忆。 | archived | memory-bootstrap | [[日志/2026-08-23-历史基线与工程记忆初始化|2026-08-23｜历史基线与工程记忆初始化]] |
