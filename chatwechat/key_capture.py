@@ -11,7 +11,7 @@ import subprocess
 import sys
 from ctypes import wintypes
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from .crypto import PAGE_SIZE, parse_candidate_literals, validate_page_key
 from .discovery import database_files, optional_database_files
@@ -318,17 +318,28 @@ class SHELLEXECUTEINFO(ctypes.Structure):
     ]
 
 
+def elevated_command(account_dir: Path, result_path: Path) -> tuple[str, list[str], Path]:
+    if getattr(sys, "frozen", False):
+        arguments = ["--authorize-helper", "--account", str(account_dir), "--result", str(result_path)]
+        working_directory = Path(sys.executable).resolve().parent
+    else:
+        arguments = [
+            "-m", "chatwechat", "--authorize-helper", "--account", str(account_dir), "--result", str(result_path)
+        ]
+        working_directory = Path.cwd()
+    return sys.executable, arguments, working_directory
+
+
 def run_elevated(account_dir: Path, result_path: Path) -> dict[str, object]:
-    parameters = subprocess.list2cmdline([
-        "-m", "chatwechat.key_capture", "--account", str(account_dir), "--result", str(result_path)
-    ])
+    executable, arguments, working_directory = elevated_command(account_dir, result_path)
+    parameters = subprocess.list2cmdline(arguments)
     info = SHELLEXECUTEINFO()
     info.cbSize = ctypes.sizeof(info)
     info.fMask = 0x00000040
     info.lpVerb = "runas"
-    info.lpFile = sys.executable
+    info.lpFile = executable
     info.lpParameters = parameters
-    info.lpDirectory = str(Path.cwd())
+    info.lpDirectory = str(working_directory)
     info.nShow = 0
     if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
         raise ctypes.WinError()
@@ -340,11 +351,11 @@ def run_elevated(account_dir: Path, result_path: Path) -> dict[str, object]:
         result_path.unlink(missing_ok=True)
 
 
-def main() -> int:
+def authorization_helper(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--account", required=True, type=Path)
     parser.add_argument("--result", required=True, type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     result: dict[str, object]
     try:
         result = {"ok": True, **authorize(args.account)}
@@ -353,6 +364,10 @@ def main() -> int:
     args.result.parent.mkdir(parents=True, exist_ok=True)
     args.result.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     return 0 if result["ok"] else 1
+
+
+def main() -> int:
+    return authorization_helper()
 
 
 if __name__ == "__main__":

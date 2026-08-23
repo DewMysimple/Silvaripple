@@ -28,6 +28,7 @@ from PIL import Image, UnidentifiedImageError
 
 from .keystore import KeyStore
 from .models import Attachment
+from .infrastructure.runtime import RuntimeLocator
 
 
 MIB = 1024 * 1024
@@ -640,7 +641,7 @@ class MediaExporter:
 
     @staticmethod
     def _ffmpeg_path() -> str | None:
-        return shutil.which("ffmpeg")
+        return RuntimeLocator.current().tool("ffmpeg")
 
     @staticmethod
     def _wxgf_partitions(data: bytes) -> list[tuple[int, int]]:
@@ -686,6 +687,7 @@ class MediaExporter:
                     input=data[offset : offset + size],
                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                     creationflags=SUBPROCESS_FLAGS,
+                    env=RuntimeLocator.current().runtime_environment("ffmpeg"),
                     timeout=45,
                     check=False,
                 )
@@ -711,7 +713,9 @@ class MediaExporter:
                         "-f", "gif", "pipe:1",
                     ],
                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                    creationflags=SUBPROCESS_FLAGS, timeout=90, check=False,
+                    creationflags=SUBPROCESS_FLAGS,
+                    env=RuntimeLocator.current().runtime_environment("ffmpeg"),
+                    timeout=90, check=False,
                 )
             except (OSError, subprocess.TimeoutExpired):
                 return None
@@ -720,8 +724,9 @@ class MediaExporter:
         return None
 
     def _decode_voice(self, source: Path, target_folder: Path, stem: str) -> Path | None:
-        node = shutil.which("node")
-        script = Path(__file__).parent / "vendor" / "silk-wasm" / "decode_voice.mjs"
+        locator = RuntimeLocator.current()
+        node = locator.tool("node")
+        script = locator.vendor_file("silk-wasm", "decode_voice.mjs")
         if not node or not script.is_file():
             return None
         target = self._unique_target(target_folder, stem, ".wav")
@@ -731,6 +736,7 @@ class MediaExporter:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=SUBPROCESS_FLAGS,
+                env=locator.runtime_environment("node"),
                 timeout=90,
                 check=False,
             )
