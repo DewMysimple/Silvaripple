@@ -102,9 +102,9 @@ finally {
     Pop-Location
 }
 
-$portable = Join-Path $dist "ChatWechat"
-$nodeTarget = Join-Path $portable "runtime\node"
-$ffmpegTarget = Join-Path $portable "runtime\ffmpeg"
+$application = Join-Path $dist "ChatWechat"
+$nodeTarget = Join-Path $application "runtime\node"
+$ffmpegTarget = Join-Path $application "runtime\ffmpeg"
 New-Item -ItemType Directory -Path $nodeTarget, $ffmpegTarget | Out-Null
 Copy-Item -LiteralPath $NodeExecutable -Destination (Join-Path $nodeTarget "node.exe")
 Copy-Item -LiteralPath (Join-Path $root "packaging\NODE-LICENSE.txt") -Destination (Join-Path $nodeTarget "LICENSE.txt")
@@ -112,9 +112,9 @@ foreach ($expected in $lock.ffmpeg.files) {
     Copy-Item -LiteralPath (Join-Path $FfmpegBinDirectory ([string]$expected.name)) -Destination $ffmpegTarget
 }
 Copy-Item -LiteralPath $ffmpegLicense -Destination (Join-Path $ffmpegTarget "LICENSE.txt")
-Copy-Item -LiteralPath (Join-Path $root "THIRD_PARTY_NOTICES.md") -Destination $portable
-Copy-Item -LiteralPath (Join-Path $root "packaging\PORTABLE-README.txt") -Destination (Join-Path $portable "README.txt")
-Copy-Item -LiteralPath (Join-Path $root "packaging\runtime.lock.json") -Destination $portable
+Copy-Item -LiteralPath (Join-Path $root "THIRD_PARTY_NOTICES.md") -Destination $application
+Copy-Item -LiteralPath (Join-Path $root "packaging\INSTALL-README.txt") -Destination (Join-Path $application "README.txt")
+Copy-Item -LiteralPath (Join-Path $root "packaging\runtime.lock.json") -Destination $application
 
 $selfTestPath = Join-Path $stage "self-test.json"
 $isolatedLocalAppData = Join-Path $stage "isolated-localappdata"
@@ -124,7 +124,7 @@ $savedLocalAppData = $env:LOCALAPPDATA
 try {
     $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
     $env:LOCALAPPDATA = $isolatedLocalAppData
-    $process = Start-Process -FilePath (Join-Path $portable "ChatWechat.exe") -ArgumentList @("--self-test", "--json", "--output", $selfTestPath) -Wait -PassThru -WindowStyle Hidden
+    $process = Start-Process -FilePath (Join-Path $application "ChatWechat.exe") -ArgumentList @("--self-test", "--json", "--output", $selfTestPath) -Wait -PassThru -WindowStyle Hidden
     if ($process.ExitCode -ne 0) {
         throw "Packaged self-test failed with exit code $($process.ExitCode)."
     }
@@ -144,8 +144,8 @@ if (-not $selfTest.runtime_tools.node.bundled -or -not $selfTest.runtime_tools.f
 $result = [ordered]@{
     version = $version
     staging_root = $stage
-    portable_root = $portable
-    executable = (Join-Path $portable "ChatWechat.exe")
+    application_root = $application
+    executable = (Join-Path $application "ChatWechat.exe")
     self_test = $selfTestPath
 }
 $resultPath = Join-Path $stage "build-result.json"

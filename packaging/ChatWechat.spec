@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Relative-path PyInstaller definition for the complete portable build."""
+"""Relative-path PyInstaller definition for the internal installer staging tree."""
 
 import os
 from pathlib import Path
@@ -47,6 +47,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon=str(ROOT / "packaging" / "ChatWechat.ico"),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

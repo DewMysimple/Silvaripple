@@ -102,33 +102,45 @@ corepack pnpm build
 前端开发服务器使用 Mock Desktop Bridge；生产应用始终调用 pywebview 注入的结构化
 Bridge。用户运行生产版本不需要安装 Node.js，Node 仅用于开发构建和可选语音解码。
 
-## 架构与便携版
+## 架构与安装版
 
 工程保持模块化桌面单体：`desktop` 负责启动、Bridge 和冻结资源，`application` 暴露
 用例门面，`domain` 与 `infrastructure` 承载规则和平台能力，导出/媒体模块独立演进；
 React 前端按应用外壳、页面、通用 UI 和 Zustand 状态切片拆分。现有 Bridge 方法保持
 兼容，因此常规功能修改不需要同步重写桌面壳和所有页面。
 
-构建完整 onedir 便携版：
+构建安装器前会在仓库外临时目录生成 PyInstaller onedir staging；onedir 不是用户交付格式：
 
 ```powershell
 python -m pip install ".[test,build]"
-powershell -ExecutionPolicy Bypass -File scripts\Build-Portable.ps1
+powershell -ExecutionPolicy Bypass -File scripts\Build-Installer.ps1
 ```
 
-构建脚本在仓库外的临时目录工作，验证前端、Python、工程记忆、锁定的 Node/FFmpeg，
-并执行冻结版 `--self-test`。本地正式覆盖要求工作区已经提交且干净：
+构建脚本在仓库外的临时目录工作，验证前端、Python、工程记忆、锁定的 Node/FFmpeg、
+NSIS，并执行冻结版和隔离安装后的 `--self-test`。本地正式覆盖要求工作区已经提交且干净：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
 ```
 
-成功后只保留桌面“发布版本”中的一个源码 ZIP，以及“免安装便携版/ChatWechat”中的一个
-完整便携目录；失败不会替换上一版。便携目录必须整体移动，不能只复制 EXE。普通
-`main` 推送不会创建 GitHub Release；只有明确发布并推送与 `pyproject.toml` 一致的
-`vX.Y.Z` 标签时，标签工作流才会创建版本化资产。该工作流需要仓库变量
+成功后只保留桌面“发布版本”中的一个安装包、一个源码 ZIP 和一个校验文件：
+
+```text
+发布版本/
+  ChatWechat-Setup.exe
+  ChatWechat-source.zip
+  SHA256SUMS.txt
+```
+
+安装程序默认写入 `%LOCALAPPDATA%\Programs\ChatWechat`，设置、DPAPI 密钥、任务历史和
+临时文件继续位于 `%LOCALAPPDATA%\ChatWechat`。安装器创建开始菜单和桌面快捷方式；升级
+时提示关闭正在运行的应用，不删除用户数据。首次安装会尝试把旧的
+`桌面\免安装便携版\ChatWechat` 重命名为带时间戳的备份目录，失败时保留原目录。
+
+失败不会替换上一版安装包或源码包。普通 `main` 推送不会创建 GitHub Release；只有明确发布
+并推送与 `pyproject.toml` 一致的 `vX.Y.Z` 标签时，标签工作流才会创建版本化安装资产。该工作流需要仓库变量
 `CHATWECHAT_FFMPEG_ARCHIVE_URL` 和 `CHATWECHAT_FFMPEG_ARCHIVE_SHA256` 指向与
-`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。
+`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。普通源码发布不再生成 onedir 或便携格式交付物。
 
 ## 当前适配边界
 

@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  windows-portable:
+  windows-installer:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,12 +48,12 @@ jobs:
           if ($actual -ine $env:FFMPEG_ARCHIVE_SHA256) { throw "FFmpeg archive checksum mismatch." }
           Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $env:RUNNER_TEMP "ffmpeg")
 
-      - name: Build and verify portable application
+      - name: Build and verify NSIS installer
         shell: pwsh
         run: |
           $ffmpeg = Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "ffmpeg") -Filter ffmpeg.exe -Recurse | Select-Object -First 1
           if (-not $ffmpeg) { throw "FFmpeg archive does not contain ffmpeg.exe." }
-          $result = & scripts\Build-Portable.ps1 -OutputRoot (Join-Path $env:RUNNER_TEMP "chatwechat-build") -NodeExecutable (Get-Command node.exe).Source -FfmpegBinDirectory $ffmpeg.DirectoryName
+          $result = & scripts\Build-Installer.ps1 -OutputRoot (Join-Path $env:RUNNER_TEMP "chatwechat-build") -NodeExecutable (Get-Command node.exe).Source -FfmpegBinDirectory $ffmpeg.DirectoryName
           $result | Select-Object -Last 1 | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP "build-result-path.txt")
 
       - name: Assemble release assets
@@ -65,13 +65,13 @@ jobs:
           $assetRoot = Join-Path $env:RUNNER_TEMP "release-assets"
           New-Item -ItemType Directory -Path $assetRoot | Out-Null
           $source = Join-Path $assetRoot "ChatWechat-$($result.version)-source.zip"
-          $portable = Join-Path $assetRoot "ChatWechat-$($result.version)-windows-portable.zip"
+          $installer = Join-Path $assetRoot "ChatWechat-$($result.version)-windows-x64-setup.exe"
           git archive --format=zip --output=$source HEAD
           if ($LASTEXITCODE -ne 0) { throw "Source archive failed." }
-          Compress-Archive -Path (Join-Path $result.portable_root "*") -DestinationPath $portable -CompressionLevel Optimal
+          Copy-Item -LiteralPath $result.installer -Destination $installer
           $hashes = @(
             "$((Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($source))",
-            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $portable).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($portable))"
+            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($installer))"
           ) -join "`n"
           Set-Content -LiteralPath (Join-Path $assetRoot "SHA256SUMS.txt") -Value $hashes -Encoding UTF8
           "asset_root=$assetRoot" >> $env:GITHUB_OUTPUT
