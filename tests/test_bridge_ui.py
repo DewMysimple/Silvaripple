@@ -113,7 +113,10 @@ def test_bridge_contract_and_ui_assets():
     assert assets
     javascript = assets[0].read_text(encoding="utf-8")
     frontend = Path(__file__).parents[1] / "frontend" / "src"
-    source = (frontend / "App.tsx").read_text(encoding="utf-8")
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(frontend.rglob("*.tsx"))
+    )
     assert "pywebview" in javascript
     assert "开始导出" in source and "允许数据库覆盖不完整" in source
     assert "allow_legacy_http_media" in source

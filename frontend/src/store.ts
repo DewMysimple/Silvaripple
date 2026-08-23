@@ -13,6 +13,8 @@ import type {
   Settings,
   ViewId,
 } from "./types";
+import { createExportDraft, mergeExportDraft } from "./state/exportDraft";
+import { ensureId, mergeIds, toggleId } from "./state/selection";
 
 interface WorkbenchState {
   initialized: boolean;
@@ -103,7 +105,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   clearError: () => set({ error: undefined }),
   updateExportDraft: (value) =>
     set((state) => ({
-      exportDraft: { ...(state.exportDraft as ExportDraft), ...value },
+      exportDraft: mergeExportDraft(state.exportDraft, value),
     })),
   resetExportDraft: () => set({ exportDraft: undefined }),
   setExportOperationId: (exportOperationId) => set({ exportOperationId }),
@@ -121,21 +123,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         settings: data.settings,
         accounts: data.accounts,
         account,
-        exportDraft: state.exportDraft ?? {
-          formats: ["html", "markdown", "json"],
-          includeMedia: true,
-          downloadMedia: data.settings.download_missing_media_default,
-          legacyHttp: data.settings.allow_legacy_http_media_default,
-          visualLimit: data.settings.visual_download_limit_mib,
-          audioLimit: data.settings.audio_download_limit_mib,
-          largeLimit: data.settings.large_download_limit_mib,
-          allowPartial: false,
-          output: data.settings.output_directory,
-          startAt: "",
-          endAt: "",
-          messageTypes: [],
-          mediaCategories: [],
-        },
+        exportDraft: state.exportDraft ?? createExportDraft(data.settings),
       }));
       if (account?.coverage.covered) await get().loadConversations();
       await Promise.all([
@@ -195,23 +183,17 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
   toggleSelected: (id) =>
     set((state) => ({
-      selected: state.selected.includes(id)
-        ? state.selected.filter((item) => item !== id)
-        : [...state.selected, id],
+      selected: toggleId(state.selected, id),
     })),
   ensureSelected: (id) =>
     set((state) => ({
-      selected: state.selected.includes(id)
-        ? state.selected
-        : [...state.selected, id],
+      selected: ensureId(state.selected, id),
     })),
   selectVisible: () =>
     set((state) => ({
-      selected: Array.from(
-        new Set([
-          ...state.selected,
-          ...state.conversations.map((item) => item.conversation_id),
-        ]),
+      selected: mergeIds(
+        state.selected,
+        state.conversations.map((item) => item.conversation_id),
       ),
     })),
   clearSelected: () => set({ selected: [] }),
