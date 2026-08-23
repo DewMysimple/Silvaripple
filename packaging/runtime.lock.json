@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "node": {
+    "version": "24.16.0",
+    "source": "https://nodejs.org/download/release/v24.16.0/",
+    "download_url": "https://nodejs.org/download/release/v24.16.0/win-x64/node.exe",
+    "files": [
+      {
+        "name": "node.exe",
+        "size": 92279112,
+        "sha256": "b3094d0b49f9ad602262a9921551737bb97637c05dd357a06ae98188d7290aa3"
+      }
+    ]
+  },
+  "ffmpeg": {
+    "version_prefix": "ffmpeg version n8.0.1-23-gf9a3e1b776-20251204",
+    "source": "https://github.com/BtbN/FFmpeg-Builds/releases",
+    "files": [
+      {"name": "avcodec-62.dll", "size": 105692672, "sha256": "df7ca23313c0e19a6e6cfbb6718ed1c0b89c0b0f519388977805ca4b5272c67d"},
+      {"name": "avdevice-62.dll", "size": 3625472, "sha256": "a1f31789c079d5dd0a26a2b886f7847c059b31054abc6dd07462517d555c8879"},
+      {"name": "avfilter-11.dll", "size": 82246144, "sha256": "8535cc5ef816de28a97641ead60cf29d9a991aa301787a4b176d55ac32429ae9"},
+      {"name": "avformat-62.dll", "size": 21992960, "sha256": "01d62b0352b687d0019493a4c02916743b9d21dc7bae20164bab4f33687edd44"},
+      {"name": "avutil-60.dll", "size": 2939904, "sha256": "a78bccaa068e68a75db61eae02bf2b340cbc65ebbfac83023972cb9026f89b8f"},
+      {"name": "ffmpeg.exe", "size": 527872, "sha256": "1df96e2a8c272049e7a20cdbd9594c161987a9c35cf8e56fc15c1c1684676f98"},
+      {"name": "swresample-6.dll", "size": 723456, "sha256": "ec71e79bab1c4bb55cf33b383e79f54be6da5c4728151e93c8ffad110bfcad8a"},
+      {"name": "swscale-9.dll", "size": 1910272, "sha256": "4f5eadb511d369d60b71e8933fa72875da2b01a3083db7a663cfc94116c7f069"}
+    ],
+    "license": {
+      "name": "LICENSE.txt",
+      "size": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    }
+  }
+}

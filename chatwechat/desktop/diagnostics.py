@@ -13,7 +13,7 @@ from ..infrastructure.runtime import RuntimeLocator
 from ..keystore import protect, unprotect
 
 
-def _webview2_available() -> bool:
+def webview2_available() -> bool:
     if os.name != "nt":
         return False
     roots = [
@@ -43,21 +43,39 @@ def self_test(locator: RuntimeLocator | None = None) -> dict[str, Any]:
         dpapi = unprotect(protect(probe)) == probe
     except (OSError, RuntimeError):
         dpapi = False
+    try:
+        from ..application import ChatWechatService
+
+        service = ChatWechatService()
+        service.close()
+        service_init = True
+    except (OSError, RuntimeError, ValueError):
+        service_init = False
+    bundled_node = locator.bundled_tool("node")
+    bundled_ffmpeg = locator.bundled_tool("ffmpeg")
     checks = {
         "web_assets": locator.web_index().is_file(),
         "silk_wasm": locator.vendor_file("silk-wasm", "silk.wasm").is_file(),
         "node": bool(node),
         "ffmpeg": bool(ffmpeg),
         "windows": os.name == "nt",
-        "webview2": _webview2_available(),
+        "webview2": webview2_available(),
         "cng": cng,
         "dpapi": dpapi,
+        "service_init": service_init,
     }
-    required = ("web_assets", "silk_wasm", "node", "ffmpeg", "windows", "webview2", "cng", "dpapi")
+    required = (
+        "web_assets", "silk_wasm", "node", "ffmpeg", "windows",
+        "webview2", "cng", "dpapi", "service_init",
+    )
     return {
         "ok": all(checks[name] for name in required),
         "version": __version__,
         "frozen": locator.frozen,
         "platform": platform.platform(),
         "checks": checks,
+        "runtime_tools": {
+            "node": {"available": bool(node), "bundled": bool(bundled_node)},
+            "ffmpeg": {"available": bool(ffmpeg), "bundled": bool(bundled_ffmpeg)},
+        },
     }

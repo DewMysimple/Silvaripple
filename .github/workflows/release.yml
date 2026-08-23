@@ -1,0 +1,85 @@
+name: Release ChatWechat
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.16.0"
+
+      - name: Verify release tag and install build dependencies
+        shell: pwsh
+        run: |
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag and pyproject version differ." }
+          python -m pip install --upgrade pip
+          python -m pip install ".[test,build]"
+          corepack enable
+
+      - name: Acquire pinned FFmpeg runtime
+        shell: pwsh
+        env:
+          FFMPEG_ARCHIVE_URL: ${{ vars.CHATWECHAT_FFMPEG_ARCHIVE_URL }}
+          FFMPEG_ARCHIVE_SHA256: ${{ vars.CHATWECHAT_FFMPEG_ARCHIVE_SHA256 }}
+        run: |
+          if (-not $env:FFMPEG_ARCHIVE_URL -or -not $env:FFMPEG_ARCHIVE_SHA256) {
+            throw "Configure CHATWECHAT_FFMPEG_ARCHIVE_URL and CHATWECHAT_FFMPEG_ARCHIVE_SHA256 before releasing."
+          }
+          $archive = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
+          Invoke-WebRequest -Uri $env:FFMPEG_ARCHIVE_URL -OutFile $archive
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash
+          if ($actual -ine $env:FFMPEG_ARCHIVE_SHA256) { throw "FFmpeg archive checksum mismatch." }
+          Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $env:RUNNER_TEMP "ffmpeg")
+
+      - name: Build and verify portable application
+        shell: pwsh
+        run: |
+          $ffmpeg = Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "ffmpeg") -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          if (-not $ffmpeg) { throw "FFmpeg archive does not contain ffmpeg.exe." }
+          $result = & scripts\Build-Portable.ps1 -OutputRoot (Join-Path $env:RUNNER_TEMP "chatwechat-build") -NodeExecutable (Get-Command node.exe).Source -FfmpegBinDirectory $ffmpeg.DirectoryName
+          $result | Select-Object -Last 1 | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP "build-result-path.txt")
+
+      - name: Assemble release assets
+        id: assets
+        shell: pwsh
+        run: |
+          $resultPath = (Get-Content -Raw -LiteralPath (Join-Path $env:RUNNER_TEMP "build-result-path.txt")).Trim()
+          $result = Get-Content -Raw -LiteralPath $resultPath | ConvertFrom-Json
+          $assetRoot = Join-Path $env:RUNNER_TEMP "release-assets"
+          New-Item -ItemType Directory -Path $assetRoot | Out-Null
+          $source = Join-Path $assetRoot "ChatWechat-$($result.version)-source.zip"
+          $portable = Join-Path $assetRoot "ChatWechat-$($result.version)-windows-portable.zip"
+          git archive --format=zip --output=$source HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Source archive failed." }
+          Compress-Archive -Path (Join-Path $result.portable_root "*") -DestinationPath $portable -CompressionLevel Optimal
+          $hashes = @(
+            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($source))",
+            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $portable).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($portable))"
+          ) -join "`n"
+          Set-Content -LiteralPath (Join-Path $assetRoot "SHA256SUMS.txt") -Value $hashes -Encoding UTF8
+          "asset_root=$assetRoot" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem -LiteralPath "${{ steps.assets.outputs.asset_root }}" -File | Select-Object -ExpandProperty FullName
+          gh release create "${{ github.ref_name }}" @assets --verify-tag --generate-notes --title "ChatWechat ${{ github.ref_name }}"

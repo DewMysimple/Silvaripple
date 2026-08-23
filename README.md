@@ -29,7 +29,7 @@ ChatWechat 是一个 Windows 本地微信手动导出工作台。它面向微信
 ```powershell
 cd C:\Users\Administrator\Desktop\ChatWechat
 python -m pip install -r requirements.txt
-python -m chatwechat.app
+python -m chatwechat
 ```
 
 也可以双击 `启动ChatWechat.pyw`。默认数据目录是
@@ -39,7 +39,7 @@ python -m chatwechat.app
 
 1. 应用自动恢复上次账号；已有有效密钥时不会再次触发 UAC。
 2. 在“会话浏览”中筛选、预览并选择会话。
-3. 在“导出工作台”选择输出目录、格式和媒体策略，先计算规模再开始导出。
+3. 在“导出工作台”选择输出目录、格式和媒体策略；规模会自动更新。
 4. 需要时在“媒体完整性”手动扫描整个账号，或在“全局搜索”按需搜索正文。
 
 历史账号必须先在微信中切换并登录，确保对应运行时密钥存在，再重新授权。密钥覆盖
@@ -73,9 +73,8 @@ python -m chatwechat.app
 扁平结构，或按账号和会话类型分组。旧版时间批次目录不会自动迁移或修改。
 
 媒体解析只处理消息实际引用的文件，以 SHA-256 去重。同一 NTFS 卷优先创建硬链接，
-其他情况复制。联网补全默认关闭；启用后只访问消息已有的腾讯白名单地址。旧版
-`vweixinf.tc.qq.com` HTTP 表情地址还需要本次导出单独授权，并通过图片头、完整解码与
-本地 MD5 校验。授权不会写入设置或预设，下载内容只进入本次导出目录。无法验证的
+其他情况复制。联网补全和受限旧腾讯表情地址默认开启，用户可在设置或导出草稿中关闭；
+下载只访问受控腾讯地址，并通过文件头、完整解码和可用的本地 MD5 校验。无法验证的
 缓存保留原始文件并记录细分原因。
 
 ## 语音组件
@@ -102,6 +101,34 @@ corepack pnpm build
 
 前端开发服务器使用 Mock Desktop Bridge；生产应用始终调用 pywebview 注入的结构化
 Bridge。用户运行生产版本不需要安装 Node.js，Node 仅用于开发构建和可选语音解码。
+
+## 架构与便携版
+
+工程保持模块化桌面单体：`desktop` 负责启动、Bridge 和冻结资源，`application` 暴露
+用例门面，`domain` 与 `infrastructure` 承载规则和平台能力，导出/媒体模块独立演进；
+React 前端按应用外壳、页面、通用 UI 和 Zustand 状态切片拆分。现有 Bridge 方法保持
+兼容，因此常规功能修改不需要同步重写桌面壳和所有页面。
+
+构建完整 onedir 便携版：
+
+```powershell
+python -m pip install ".[test,build]"
+powershell -ExecutionPolicy Bypass -File scripts\Build-Portable.ps1
+```
+
+构建脚本在仓库外的临时目录工作，验证前端、Python、工程记忆、锁定的 Node/FFmpeg，
+并执行冻结版 `--self-test`。本地正式覆盖要求工作区已经提交且干净：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
+```
+
+成功后只保留桌面“发布版本”中的一个源码 ZIP，以及“免安装便携版/ChatWechat”中的一个
+完整便携目录；失败不会替换上一版。便携目录必须整体移动，不能只复制 EXE。普通
+`main` 推送不会创建 GitHub Release；只有明确发布并推送与 `pyproject.toml` 一致的
+`vX.Y.Z` 标签时，标签工作流才会创建版本化资产。该工作流需要仓库变量
+`CHATWECHAT_FFMPEG_ARCHIVE_URL` 和 `CHATWECHAT_FFMPEG_ARCHIVE_SHA256` 指向与
+`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。
 
 ## 当前适配边界
 

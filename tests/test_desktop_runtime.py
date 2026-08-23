@@ -26,6 +26,30 @@ def test_runtime_locator_prefers_bundled_tools(tmp_path):
     assert locator.runtime_environment("ffmpeg")["PATH"].split(";")[0].endswith("runtime\\ffmpeg")
 
 
+def test_self_test_reports_bundled_runtime_tools(monkeypatch, tmp_path):
+    from chatwechat.desktop import diagnostics
+    from chatwechat.infrastructure.runtime import RuntimeLocator
+
+    package = tmp_path / "bundle" / "chatwechat"
+    (package / "web").mkdir(parents=True)
+    (package / "web" / "index.html").write_text("ok", encoding="utf-8")
+    (package / "vendor" / "silk-wasm").mkdir(parents=True)
+    (package / "vendor" / "silk-wasm" / "silk.wasm").write_bytes(b"wasm")
+    for name in ("node", "ffmpeg"):
+        folder = tmp_path / "runtime" / name
+        folder.mkdir(parents=True)
+        (folder / f"{name}.exe").write_bytes(name.encode())
+    monkeypatch.setattr(diagnostics, "webview2_available", lambda: True)
+    monkeypatch.setattr(diagnostics, "WindowsCngAes", lambda: object())
+    monkeypatch.setattr(diagnostics, "protect", lambda value: value)
+    monkeypatch.setattr(diagnostics, "unprotect", lambda value: value)
+
+    result = diagnostics.self_test(RuntimeLocator(tmp_path, tmp_path / "bundle", package))
+
+    assert result["runtime_tools"]["node"]["bundled"] is True
+    assert result["runtime_tools"]["ffmpeg"]["bundled"] is True
+
+
 def test_desktop_entrypoint_dispatches_authorization_helper(monkeypatch):
     import chatwechat.desktop.entrypoint as entrypoint
 

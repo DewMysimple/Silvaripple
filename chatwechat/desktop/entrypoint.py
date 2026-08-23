@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import logging
 import sys
@@ -17,7 +18,7 @@ from ..key_capture import authorization_helper
 from ..redaction import RedactingFormatter
 from ..infrastructure.runtime import RuntimeLocator
 from .bridge import Bridge
-from .diagnostics import self_test
+from .diagnostics import self_test, webview2_available
 
 
 def configure_logging() -> None:
@@ -37,8 +38,33 @@ def system_background() -> str:
         return "#FFFFFF"
 
 
+def _attach_parent_console() -> None:
+    """Make JSON diagnostics visible when the windowed EXE is called by a shell."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    try:
+        if ctypes.windll.kernel32.AttachConsole(-1):
+            sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+            sys.stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+    except OSError:
+        pass
+
+
+def _show_startup_error(message: str) -> None:
+    if sys.platform == "win32":
+        ctypes.windll.user32.MessageBoxW(None, message, "ChatWechat 无法启动", 0x10)
+    else:
+        print(message, file=sys.stderr)
+
+
 def run_desktop() -> int:
     configure_logging()
+    if not webview2_available():
+        _show_startup_error(
+            "未检测到 Microsoft Edge WebView2 Runtime。\n\n"
+            "请先安装 WebView2 Runtime，再重新启动 ChatWechat。"
+        )
+        return 2
     service = ChatWechatService()
     locator = RuntimeLocator.current()
     page = locator.web_index()
@@ -67,6 +93,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.add_argument("--json", action="store_true")
         parser.add_argument("--output", type=Path)
         options = parser.parse_args(values[1:])
+        if not options.output:
+            _attach_parent_console()
         result = self_test()
         output = json.dumps(result, ensure_ascii=False, indent=None if options.json else 2)
         if options.output:

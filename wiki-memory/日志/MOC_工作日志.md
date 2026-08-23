@@ -16,6 +16,7 @@ supersedes: null
 | 2026-08-23 | maintenance | 根据现有代码、测试与已确认需求建立可信工程基线和持久记忆。 | archived | memory-bootstrap | [[日志/2026-08-23-历史基线与工程记忆初始化|2026-08-23｜历史基线与工程记忆初始化]] |
 | 2026-08-23 | maintenance | 在不改变 Bridge 或页面行为的情况下建立 React 功能边界。 | archived | react-workbench-modularization | [[日志/2026-08-23-React工作台渐进拆分|2026-08-23｜React 工作台渐进拆分]] |
 | 2026-08-23 | feature | 建立源码与冻结态共用的桌面入口、资源定位和管理员授权子模式。 | archived | desktop-runtime-and-layer-entrypoints | [[日志/2026-08-23-桌面运行时与分层入口|2026-08-23｜桌面运行时与分层入口]] |
+| 2026-08-23 | architecture | 建立可维护、可验证、不会破坏上一版的 Windows EXE 与本地固定产物流程。 | archived | exe-and-local-release-system | [[日志/2026-08-23-EXE与本地发布体系|2026-08-23｜EXE 与本地发布体系]] |
 
 ## 入口
 
