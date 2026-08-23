@@ -22,7 +22,7 @@ binaries += webview_binaries
 hiddenimports += webview_hidden
 
 analysis = Analysis(
-    [str(ROOT / "启动ChatWechat.pyw")],
+    [str(ROOT / "chatwechat" / "desktop" / "frozen_entry.py")],
     pathex=[str(ROOT)],
     binaries=binaries,
     datas=datas,

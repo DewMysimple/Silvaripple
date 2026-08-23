@@ -32,8 +32,7 @@ python -m pip install -r requirements.txt
 python -m chatwechat
 ```
 
-也可以双击 `启动ChatWechat.pyw`。默认数据目录是
-`D:\SoftWareDocuments\WeChatDownLoad\xwechat_files`。
+默认数据目录是 `D:\SoftWareDocuments\WeChatDownLoad\xwechat_files`。
 
 使用顺序：
 
@@ -123,10 +122,10 @@ NSIS，并执行冻结版和隔离安装后的 `--self-test`。本地正式覆�
 powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
 ```
 
-成功后只保留桌面“发布版本”中的一个安装包、一个源码 ZIP 和一个校验文件：
+成功后只保留工程内 `artifacts/发布版本/` 中的一个安装包、一个源码 ZIP 和一个校验文件：
 
 ```text
-发布版本/
+artifacts/发布版本/
   ChatWechat-Setup.exe
   ChatWechat-source.zip
   SHA256SUMS.txt
@@ -134,8 +133,7 @@ powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
 
 安装程序默认写入 `%LOCALAPPDATA%\Programs\ChatWechat`，设置、DPAPI 密钥、任务历史和
 临时文件继续位于 `%LOCALAPPDATA%\ChatWechat`。安装器创建开始菜单和桌面快捷方式；升级
-时提示关闭正在运行的应用，不删除用户数据。首次安装会尝试把旧的
-`桌面\免安装便携版\ChatWechat` 重命名为带时间戳的备份目录，失败时保留原目录。
+时提示关闭正在运行的应用，不删除用户数据。旧便携版不再作为交付物或构建输出。
 
 失败不会替换上一版安装包或源码包。普通 `main` 推送不会创建 GitHub Release；只有明确发布
 并推送与 `pyproject.toml` 一致的 `vX.Y.Z` 标签时，标签工作流才会创建版本化安装资产。该工作流需要仓库变量

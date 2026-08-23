@@ -15,6 +15,8 @@ def test_pyinstaller_spec_is_internal_windowed_staging():
     assert "SPECPATH" in source
     assert "console=False" in source
     assert "ChatWechat.ico" in source
+    assert "chatwechat" in source and "frozen_entry.py" in source
+    assert "启动ChatWechat.pyw" not in source
     assert "runtime.lock.json" not in source
     assert not re.search(r"[A-Za-z]:[/\\]Users[/\\]", source)
 
@@ -73,10 +75,15 @@ def test_release_workflow_is_tag_only_and_version_source_is_unique():
 def test_local_publish_uses_external_atomic_targets():
     source = (ROOT / "scripts" / "Publish-Local.ps1").read_text(encoding="utf-8")
 
-    assert "GetFolderPath(\"Desktop\")" in source
+    assert "artifacts\\发布版本" in source
+    assert "GetFolderPath(\"Desktop\")" not in source
     assert "Replace-FileAtomically" in source
     assert "git -C $root archive" in source
     assert "status --porcelain" in source
     assert 'Join-Path $legacyBuildRoot "portable"' in source
     assert "ChatWechat-Setup.exe" in source
-    assert "previous_portable_untouched" in source
+    assert "artifact_root" in source
+
+
+def test_source_tree_has_no_root_pyw_launcher():
+    assert not (ROOT / "启动ChatWechat.pyw").exists()

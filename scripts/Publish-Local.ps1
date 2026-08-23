@@ -51,9 +51,9 @@ function Replace-FileAtomically([string]$StagedFile, [string]$Destination) {
 }
 
 $root = [IO.Path]::GetFullPath($RepositoryRoot)
-$desktop = [Environment]::GetFolderPath("Desktop")
-if (-not $SourceZip) { $SourceZip = Join-Path $desktop "发布版本\ChatWechat-source.zip" }
-if (-not $InstallerOutput) { $InstallerOutput = Join-Path $desktop "发布版本\ChatWechat-Setup.exe" }
+$artifactRoot = Join-Path $root "artifacts\发布版本"
+if (-not $SourceZip) { $SourceZip = Join-Path $artifactRoot "ChatWechat-source.zip" }
+if (-not $InstallerOutput) { $InstallerOutput = Join-Path $artifactRoot "ChatWechat-Setup.exe" }
 $SourceZip = [IO.Path]::GetFullPath($SourceZip)
 $InstallerOutput = [IO.Path]::GetFullPath($InstallerOutput)
 
@@ -98,7 +98,7 @@ try {
         source_zip = $SourceZip
         installer = $InstallerOutput
         hashes = $hashFile
-        previous_portable_untouched = $true
+        artifact_root = (Split-Path -Parent $InstallerOutput)
     }
 }
 finally {
