@@ -9,7 +9,4 @@ htmlcov/
 build/
 dist/
 *.egg-info/
-artifacts/*
-!artifacts/.gitkeep
-!artifacts/发布版本/
-!artifacts/发布版本/.gitkeep
+artifacts/
