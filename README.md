@@ -122,23 +122,29 @@ NSIS，并执行冻结版和隔离安装后的 `--self-test`。本地正式覆�
 powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
 ```
 
-成功后只保留工程内 `artifacts/发布版本/` 中的一个安装包、一个源码 ZIP 和一个校验文件：
+成功后只保留工程内的安装包、工程内安装实例和校验文件；源码继续以 GitHub 仓库为唯一分发来源：
 
 ```text
 artifacts/发布版本/
   ChatWechat-Setup.exe
-  ChatWechat-source.zip
   SHA256SUMS.txt
+
+artifacts/安装版/ChatWechat/
+  ChatWechat.exe
+  Uninstall.exe
+  ...
 ```
 
 安装程序默认写入 `%LOCALAPPDATA%\Programs\ChatWechat`，设置、DPAPI 密钥、任务历史和
 临时文件继续位于 `%LOCALAPPDATA%\ChatWechat`。安装器创建开始菜单和桌面快捷方式；升级
-时提示关闭正在运行的应用，不删除用户数据。旧便携版不再作为交付物或构建输出。
+时提示关闭正在运行的应用，不删除用户数据。发布脚本还会用同一 NSIS 安装器在工程内
+更新 `artifacts/安装版/ChatWechat/`，便于本机直接验证；该目录和发布包均被 Git 忽略。
+旧便携版不再作为交付物或构建输出。
 
-失败不会替换上一版安装包或源码包。普通 `main` 推送不会创建 GitHub Release；只有明确发布
+失败不会替换上一版安装包或工程内安装实例。普通 `main` 推送不会创建 GitHub Release；只有明确发布
 并推送与 `pyproject.toml` 一致的 `vX.Y.Z` 标签时，标签工作流才会创建版本化安装资产。该工作流需要仓库变量
 `CHATWECHAT_FFMPEG_ARCHIVE_URL` 和 `CHATWECHAT_FFMPEG_ARCHIVE_SHA256` 指向与
-`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。普通源码发布不再生成 onedir 或便携格式交付物。
+`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。普通源码发布不再生成源码 ZIP、onedir 或便携格式交付物。
 
 ## 当前适配边界
 

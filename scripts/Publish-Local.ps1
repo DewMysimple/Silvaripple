@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$SourceZip,
     [string]$InstallerOutput,
+    [string]$InstalledRoot,
     [string]$NsisCompiler,
     [string]$NodeExecutable,
     [string]$FfmpegBinDirectory,
@@ -50,12 +50,28 @@ function Replace-FileAtomically([string]$StagedFile, [string]$Destination) {
     }
 }
 
+function Invoke-WindowedSelfTest([string]$Executable, [string]$OutputPath) {
+    $info = [Diagnostics.ProcessStartInfo]::new()
+    $info.FileName = $Executable
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    foreach ($argument in @("--self-test", "--json", "--output", $OutputPath)) { [void]$info.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::Start($info)
+    $process.WaitForExit()
+    return $process.ExitCode
+}
+
 $root = [IO.Path]::GetFullPath($RepositoryRoot)
 $artifactRoot = Join-Path $root "artifacts\发布版本"
-if (-not $SourceZip) { $SourceZip = Join-Path $artifactRoot "ChatWechat-source.zip" }
+if (-not $InstalledRoot) { $InstalledRoot = Join-Path $root "artifacts\安装版\ChatWechat" }
 if (-not $InstallerOutput) { $InstallerOutput = Join-Path $artifactRoot "ChatWechat-Setup.exe" }
-$SourceZip = [IO.Path]::GetFullPath($SourceZip)
 $InstallerOutput = [IO.Path]::GetFullPath($InstallerOutput)
+$InstalledRoot = [IO.Path]::GetFullPath($InstalledRoot)
+$installArtifactRoot = [IO.Path]::GetFullPath((Join-Path $root "artifacts\安装版"))
+Assert-ChildPath $root $artifactRoot
+Assert-ChildPath $artifactRoot $InstallerOutput
+Assert-ChildPath $installArtifactRoot $InstalledRoot
 
 $dirty = git -C $root status --porcelain
 Assert-ExitCode "Git status"
@@ -73,20 +89,43 @@ try {
         -SkipFrontendInstall:$SkipFrontendInstall
     $buildResult = Get-Content -Raw -LiteralPath ($buildResultPath | Select-Object -Last 1) | ConvertFrom-Json
 
-    $sourceStage = Join-Path $stage "ChatWechat-source.zip"
-    git -C $root archive --format=zip --output=$sourceStage HEAD
-    Assert-ExitCode "Source archive"
-    Replace-FileAtomically $sourceStage $SourceZip
     Replace-FileAtomically ([string]$buildResult.installer) $InstallerOutput
 
-    $hashFile = Join-Path (Split-Path -Parent $SourceZip) "SHA256SUMS.txt"
+    $hashFile = Join-Path $artifactRoot "SHA256SUMS.txt"
     $hashStage = Join-Path $stage "SHA256SUMS.txt"
-    $hashContent = @(
-        "$((Get-FileHash -Algorithm SHA256 -LiteralPath $SourceZip).Hash.ToLowerInvariant())  ChatWechat-source.zip",
-        "$((Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerOutput).Hash.ToLowerInvariant())  ChatWechat-Setup.exe"
-    ) -join "`n"
+    $hashContent = "$((Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerOutput).Hash.ToLowerInvariant())  ChatWechat-Setup.exe"
     Set-Content -LiteralPath $hashStage -Value $hashContent -Encoding UTF8
     Replace-FileAtomically $hashStage $hashFile
+
+    $legacySourceZip = Join-Path $artifactRoot "ChatWechat-source.zip"
+    if (Test-Path -LiteralPath $legacySourceZip -PathType Leaf) { Remove-Item -LiteralPath $legacySourceZip -Force }
+
+    $localTestInstaller = [IO.Path]::GetFullPath([string]$buildResult.test_installer)
+    $installParent = Split-Path -Parent $InstalledRoot
+    New-Item -ItemType Directory -Force -Path $installParent | Out-Null
+    $installBackup = Join-Path $installParent (".ChatWechat.backup-" + [guid]::NewGuid().ToString("N"))
+    $installBackedUp = $false
+    try {
+        if (Test-Path -LiteralPath $InstalledRoot) { Move-Item -LiteralPath $InstalledRoot -Destination $installBackup; $installBackedUp = $true }
+        $installProcess = Start-Process -FilePath $localTestInstaller -ArgumentList @("/S", "/D=$InstalledRoot") -Wait -PassThru -WindowStyle Hidden
+        if ($installProcess.ExitCode -ne 0) { throw "工程内安装失败，退出码 $($installProcess.ExitCode)。" }
+        $installedExecutable = Join-Path $InstalledRoot "ChatWechat.exe"
+        if (-not (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) { throw "工程内安装缺少 ChatWechat.exe。" }
+        $installedSelfTest = Join-Path $stage "project-installed-self-test.json"
+        $selfTestExit = Invoke-WindowedSelfTest $installedExecutable $installedSelfTest
+        if ($selfTestExit -ne 0) { throw "工程内安装版自检失败，退出码 $selfTestExit。" }
+        $selfTest = Get-Content -Raw -LiteralPath $installedSelfTest | ConvertFrom-Json
+        if (-not $selfTest.ok -or -not $selfTest.frozen) { throw "工程内安装版未通过冻结模式自检。" }
+        if ($installBackedUp -and (Test-Path -LiteralPath $installBackup)) { Remove-Item -LiteralPath $installBackup -Recurse -Force }
+    }
+    catch {
+        if (Test-Path -LiteralPath $InstalledRoot) { Remove-Item -LiteralPath $InstalledRoot -Recurse -Force }
+        if ($installBackedUp -and (Test-Path -LiteralPath $installBackup)) { Move-Item -LiteralPath $installBackup -Destination $InstalledRoot }
+        throw
+    }
+    finally {
+        if (Test-Path -LiteralPath $installBackup) { Remove-Item -LiteralPath $installBackup -Recurse -Force }
+    }
 
     $legacyBuildRoot = [IO.Path]::GetFullPath((Join-Path $root "build"))
     $legacyPortableCache = [IO.Path]::GetFullPath((Join-Path $legacyBuildRoot "portable"))
@@ -95,9 +134,9 @@ try {
 
     [pscustomobject]@{
         version = [string]$buildResult.version
-        source_zip = $SourceZip
         installer = $InstallerOutput
         hashes = $hashFile
+        installed_root = $InstalledRoot
         artifact_root = (Split-Path -Parent $InstallerOutput)
     }
 }

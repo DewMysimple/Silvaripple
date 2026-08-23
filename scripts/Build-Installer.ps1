@@ -173,6 +173,7 @@ $result = [ordered]@{
     staging_root = $stage
     application_root = $stagingRoot
     installer = $installer
+    test_installer = $testInstaller
     nsis_compiler = $compiler
     self_test = [string]$buildResult.self_test
     installer_self_test = (Join-Path $stage "installed-self-test.json")

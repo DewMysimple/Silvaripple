@@ -69,20 +69,26 @@ def test_release_workflow_is_tag_only_and_version_source_is_unique():
     assert "Build-Installer.ps1" in workflow
     assert "windows-x64-setup.exe" in workflow
     assert "windows-portable.zip" not in workflow
+    assert "git archive" not in workflow
+    assert "source.zip" not in workflow
     assert project["project"]["version"] == "0.2.0"
 
 
-def test_local_publish_uses_external_atomic_targets():
+def test_local_publish_uses_in_repo_atomic_targets_without_source_archive():
     source = (ROOT / "scripts" / "Publish-Local.ps1").read_text(encoding="utf-8")
 
     assert "artifacts\\发布版本" in source
+    assert "artifacts\\安装版\\ChatWechat" in source
     assert "GetFolderPath(\"Desktop\")" not in source
     assert "Replace-FileAtomically" in source
-    assert "git -C $root archive" in source
+    assert "test_installer" in source
     assert "status --porcelain" in source
     assert 'Join-Path $legacyBuildRoot "portable"' in source
     assert "ChatWechat-Setup.exe" in source
     assert "artifact_root" in source
+    assert "ChatWechat-source.zip" in source
+    assert "Source archive" not in source
+    assert "source_zip" not in source
 
 
 def test_source_tree_has_no_root_pyw_launcher():

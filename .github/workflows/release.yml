@@ -64,15 +64,9 @@ jobs:
           $result = Get-Content -Raw -LiteralPath $resultPath | ConvertFrom-Json
           $assetRoot = Join-Path $env:RUNNER_TEMP "release-assets"
           New-Item -ItemType Directory -Path $assetRoot | Out-Null
-          $source = Join-Path $assetRoot "ChatWechat-$($result.version)-source.zip"
           $installer = Join-Path $assetRoot "ChatWechat-$($result.version)-windows-x64-setup.exe"
-          git archive --format=zip --output=$source HEAD
-          if ($LASTEXITCODE -ne 0) { throw "Source archive failed." }
           Copy-Item -LiteralPath $result.installer -Destination $installer
-          $hashes = @(
-            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($source))",
-            "$((Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($installer))"
-          ) -join "`n"
+          $hashes = "$((Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($installer))"
           Set-Content -LiteralPath (Join-Path $assetRoot "SHA256SUMS.txt") -Value $hashes -Encoding UTF8
           "asset_root=$assetRoot" >> $env:GITHUB_OUTPUT
 
