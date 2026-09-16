@@ -19,7 +19,12 @@ from typing import Any
 
 from . import __version__
 from .config import APP_DIR, Settings, SettingsStore
-from .discovery import database_files, discover_accounts
+from .discovery import (
+    database_files,
+    discover_accounts,
+    discover_data_roots,
+    normalize_data_root,
+)
 from .errors import ChatWechatError, OperationCancelled
 from .exporters import export_archive
 from .key_capture import authorize, is_admin, run_elevated
@@ -38,6 +43,7 @@ from .infrastructure.runtime import RuntimeLocator
 class Operation:
     operation_id: str
     kind: str
+    account_id: str | None = None
     status: str = "pending"
     progress: float = 0.0
     message: str = "等待开始"
@@ -51,6 +57,7 @@ class Operation:
         return {
             "operation_id": self.operation_id,
             "kind": self.kind,
+            "account_id": self.account_id,
             "status": self.status,
             "progress": self.progress,
             "message": self.message,
@@ -67,8 +74,14 @@ class OperationManager:
         self.lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="chatwechat")
 
-    def start(self, kind: str, worker: Any, completion: Any | None = None) -> Operation:
-        operation = Operation(uuid.uuid4().hex, kind)
+    def start(
+        self,
+        kind: str,
+        worker: Any,
+        completion: Any | None = None,
+        account_id: str | None = None,
+    ) -> Operation:
+        operation = Operation(uuid.uuid4().hex, kind, account_id=account_id)
         with self.lock:
             self.operations[operation.operation_id] = operation
 
@@ -212,6 +225,7 @@ class ChatWechatService:
                 "archive_id": None, "deleted_at": None,
                 "storage_mode": "batch", "export_id": None,
                 "conversation_archives": [], "superseded_count": 0,
+                "account_id": (row.get("result_summary") or {}).get("account_id"),
             }
             for key, value in defaults.items():
                 if key not in row:
@@ -220,7 +234,12 @@ class ChatWechatService:
         if changed:
             self.history_store.save(rows)
 
-    def _begin_history(self, kind: str, result_summary: dict[str, Any] | None = None) -> str:
+    def _begin_history(
+        self,
+        kind: str,
+        result_summary: dict[str, Any] | None = None,
+        account_id: str | None = None,
+    ) -> str:
         history_id = uuid.uuid4().hex
         rows = self.history_store.load()
         rows.append({
@@ -233,6 +252,7 @@ class ChatWechatService:
             "original_path": None, "current_path": None, "archive_id": None, "deleted_at": None,
             "storage_mode": "batch", "export_id": None,
             "conversation_archives": [], "superseded_count": 0,
+            "account_id": account_id,
         })
         self.history_store.save(rows)
         return history_id
@@ -472,7 +492,84 @@ class ChatWechatService:
                 repository.account = self.accounts[account_id]
         return rows
 
+    def _data_root_candidates(self) -> list[dict[str, object]]:
+        selected = Path(self.settings.data_root).resolve(strict=False)
+        return [
+            candidate.to_dict(selected)
+            for candidate in discover_data_roots(selected)
+        ]
+
+    def _close_repositories(self) -> None:
+        for repository in list(self.repositories.values()):
+            repository.close()
+        self.repositories.clear()
+
+    def _apply_auto_data_root(self) -> list[dict[str, object]]:
+        candidates = self._data_root_candidates()
+        if self.settings.data_root_mode != "auto" or not candidates:
+            return candidates
+        current = normalize_data_root(Path(self.settings.data_root))
+        preferred = Path(str(candidates[0]["path"]))
+        if current is None or current != preferred:
+            self._close_repositories()
+            value = asdict(self.settings)
+            value["data_root"] = str(preferred)
+            value["last_account_id"] = ""
+            self.settings = Settings.from_dict(value)
+            self.settings_store.save(self.settings)
+            candidates = self._data_root_candidates()
+        return candidates
+
+    def scan_data_roots(self) -> dict[str, Any]:
+        candidates = self._data_root_candidates()
+        return {
+            "items": candidates,
+            "selected_path": self.settings.data_root,
+            "mode": self.settings.data_root_mode,
+        }
+
+    def set_data_root(self, value: str) -> dict[str, Any]:
+        selected = normalize_data_root(Path(value))
+        if selected is None:
+            raise ChatWechatError(
+                "所选目录中没有找到微信 4.x 数据。请选择 xwechat_files、WeChat Files 或 wxid_ 账号目录。"
+            )
+        self._close_repositories()
+        current = asdict(self.settings)
+        current.update(
+            data_root=str(selected),
+            data_root_mode="manual",
+            last_account_id="",
+        )
+        self.settings = Settings.from_dict(current)
+        self.settings_store.save(self.settings)
+        accounts = self._scan()
+        self._resolve_available_account_profiles(accounts)
+        return {
+            "settings": asdict(self.settings),
+            "accounts": [account.to_dict() for account in accounts],
+            "data_roots": self._data_root_candidates(),
+        }
+
+    def use_auto_data_root(self) -> dict[str, Any]:
+        previous_root = Path(self.settings.data_root).resolve(strict=False)
+        current = asdict(self.settings)
+        current.update(data_root_mode="auto", last_account_id="")
+        self.settings = Settings.from_dict(current)
+        candidates = self._apply_auto_data_root()
+        if Path(self.settings.data_root).resolve(strict=False) != previous_root:
+            self._close_repositories()
+        accounts = self._scan()
+        self._resolve_available_account_profiles(accounts)
+        self.settings_store.save(self.settings)
+        return {
+            "settings": asdict(self.settings),
+            "accounts": [account.to_dict() for account in accounts],
+            "data_roots": candidates,
+        }
+
     def bootstrap(self) -> dict[str, Any]:
+        data_roots = self._apply_auto_data_root()
         accounts = self._scan()
         self._resolve_available_account_profiles(accounts)
         selected_account_id = self.settings.last_account_id if self.settings.last_account_id in self.accounts else ""
@@ -485,6 +582,7 @@ class ChatWechatService:
             "settings": asdict(self.settings),
             "accounts": [account.to_dict() for account in accounts],
             "selected_account_id": selected_account_id or None,
+            "data_roots": data_roots,
             "capabilities": {
                 "windows_cng": True,
                 "dpapi": True,
@@ -494,9 +592,14 @@ class ChatWechatService:
         }
 
     def scan_accounts(self) -> dict[str, Any]:
+        data_roots = self._apply_auto_data_root()
         accounts = self._scan()
         self._resolve_available_account_profiles(accounts)
-        return {"accounts": [account.to_dict() for account in accounts]}
+        return {
+            "accounts": [account.to_dict() for account in accounts],
+            "data_roots": data_roots,
+            "selected_path": self.settings.data_root,
+        }
 
     def _resolve_available_account_profiles(self, accounts: list[WechatAccount]) -> None:
         """Resolve local account names and avatars when contact data is authorized."""
@@ -708,7 +811,11 @@ class ChatWechatService:
             if output_key in self.active_export_roots:
                 raise ChatWechatError("该输出目录已有导出任务正在运行，请等待完成后重试")
             self.active_export_roots.add(output_key)
-        history_id = self._begin_history("export", {"formats": list(request.formats)})
+        history_id = self._begin_history(
+            "export",
+            {"formats": list(request.formats), "account_id": request.account_id},
+            request.account_id,
+        )
 
         def worker(cancel: threading.Event, progress: Any) -> dict[str, Any]:
             # Export owns an isolated repository/snapshot set. UI preview,
@@ -756,7 +863,9 @@ class ChatWechatService:
                 with self.lock:
                     self.active_export_roots.discard(output_key)
 
-        return self.operations.start("export", worker, completed).to_dict()
+        return self.operations.start(
+            "export", worker, completed, request.account_id
+        ).to_dict()
 
     def cancel_operation(self, operation_id: str) -> dict[str, Any]:
         return self.operations.cancel(operation_id)
@@ -839,7 +948,7 @@ class ChatWechatService:
             finally:
                 repository.close()
 
-        return self.operations.start("search", worker).to_dict()
+        return self.operations.start("search", worker, account_id=account_id).to_dict()
 
     def start_media_scan(self, account_id: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
         account = self._account(account_id)
@@ -847,7 +956,11 @@ class ChatWechatService:
         wanted = {str(value) for value in options.get("conversation_ids", []) if value}
         detailed = bool(options.get("detailed", False))
         detail_limit = min(500, max(1, int(options.get("limit", 500))))
-        history_id = self._begin_history("media_scan", {"scope": "selected" if wanted else "account"})
+        history_id = self._begin_history(
+            "media_scan",
+            {"scope": "selected" if wanted else "account", "account_id": account_id},
+            account_id,
+        )
 
         def worker(cancel: threading.Event, progress: Any) -> dict[str, Any]:
             from .media import MediaExporter
@@ -914,7 +1027,9 @@ class ChatWechatService:
                 },
             })
 
-        return self.operations.start("media_scan", worker, completed).to_dict()
+        return self.operations.start(
+            "media_scan", worker, completed, account_id
+        ).to_dict()
 
     def get_media_report(self, operation_id: str) -> dict[str, Any]:
         operation = self.operations.get(operation_id)
@@ -934,7 +1049,9 @@ class ChatWechatService:
 
     def start_account_statistics_scan(self, account_id: str) -> dict[str, Any]:
         account = self._account(account_id)
-        history_id = self._begin_history("account_statistics", {"account_id": account_id})
+        history_id = self._begin_history(
+            "account_statistics", {"account_id": account_id}, account_id
+        )
 
         def worker(cancel: threading.Event, progress: Any) -> dict[str, Any]:
             fingerprint = self._database_fingerprint(account)
@@ -983,9 +1100,11 @@ class ChatWechatService:
                 },
             })
 
-        return self.operations.start("account_statistics", worker, completed).to_dict()
+        return self.operations.start(
+            "account_statistics", worker, completed, account_id
+        ).to_dict()
 
-    def list_operation_history(self) -> dict[str, Any]:
+    def list_operation_history(self, account_id: str | None = None) -> dict[str, Any]:
         rows = self.history_store.load()
         needs_search = any(
             row.get("kind") == "export" and not row.get("deleted_at")
@@ -1008,20 +1127,27 @@ class ChatWechatService:
             changed = changed or before != after
         if changed:
             self.history_store.save(rows)
-        return {"items": list(reversed(rows))}
+        visible = [
+            row for row in rows
+            if account_id is None or row.get("account_id") == account_id
+        ]
+        return {"items": list(reversed(visible))}
 
-    def clear_operation_history(self) -> dict[str, Any]:
+    def clear_operation_history(self, account_id: str | None = None) -> dict[str, Any]:
         rows = self.history_store.load()
-        running = [row for row in rows if row.get("status") in {"pending", "running"}]
-        deleted_count = len(rows) - len(running)
-        self.history_store.save(running)
+        scoped = [row for row in rows if account_id is None or row.get("account_id") == account_id]
+        running = [row for row in scoped if row.get("status") in {"pending", "running"}]
+        retained = [row for row in rows if account_id is not None and row.get("account_id") != account_id]
+        retained.extend(running)
+        deleted_count = len(scoped) - len(running)
+        self.history_store.save(retained)
         return {
             "items": list(reversed(running)),
             "deleted_count": deleted_count,
             "preserved_running_count": len(running),
         }
 
-    def clear_abnormal_operation_history(self) -> dict[str, Any]:
+    def clear_abnormal_operation_history(self, account_id: str | None = None) -> dict[str, Any]:
         abnormal_statuses = {"failed", "interrupted"}
         abnormal_health = {"missing", "incomplete", "inaccessible"}
         rows = self.history_store.load()
@@ -1029,6 +1155,9 @@ class ChatWechatService:
         deleted_count = 0
         preserved_running_count = 0
         for row in rows:
+            if account_id is not None and row.get("account_id") != account_id:
+                retained.append(row)
+                continue
             status = str(row.get("status", ""))
             if status in {"pending", "running"}:
                 retained.append(row)
@@ -1039,8 +1168,12 @@ class ChatWechatService:
             else:
                 retained.append(row)
         self.history_store.save(retained)
+        visible = [
+            row for row in retained
+            if account_id is None or row.get("account_id") == account_id
+        ]
         return {
-            "items": list(reversed(retained)),
+            "items": list(reversed(visible)),
             "deleted_count": deleted_count,
             "preserved_running_count": preserved_running_count,
         }
@@ -1219,7 +1352,7 @@ class ChatWechatService:
 
     def save_settings(self, value: dict[str, Any]) -> dict[str, Any]:
         current = asdict(self.settings)
-        for key in ("data_root", "output_directory", "theme", "conversation_kind", "last_account_id", "font_scale", "density", "export_folder_layout"):
+        for key in ("output_directory", "theme", "conversation_kind", "last_account_id", "font_scale", "density", "export_folder_layout"):
             if key in value:
                 current[key] = str(value[key])
         for key in (

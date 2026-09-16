@@ -4,8 +4,9 @@ ChatWechat 是一个 Windows 桌面归档应用，面向微信 `4.1.12.50` 的 `
 数据格式。所有读取、预览和归档操作都由用户点击触发，不提供后台刷新、消息监控、
 发消息或修改微信数据的功能。
 
-桌面表现层使用 React 19、TypeScript、Vite、Zustand 和 Motion，生产构建作为静态资源
-由 pywebview 离线加载。界面包含首页、会话预览、按需全文搜索、归档设置、全账号媒体
+桌面表现层使用 React 19、TypeScript、Vite、Zustand、Motion 和 Tauri 2，生产构建由
+Windows WebView2 离线加载。Tauri 通过受控 JSON-RPC sidecar 调用 Python 微信解析核心。
+界面包含首页、会话预览、按需全文搜索、归档设置、全账号媒体
 完整性、任务记录和设置，并提供浅色、深色与跟随 Windows 三种主题模式。
 
 ## 安全模型
@@ -27,19 +28,28 @@ ChatWechat 是一个 Windows 桌面归档应用，面向微信 `4.1.12.50` 的 `
 ## 运行
 
 ```powershell
-cd C:\Users\Administrator\Desktop\ChatWechat
 python -m pip install -r requirements.txt
+corepack pnpm@10.34.5 --dir frontend install
 python -m chatwechat
 ```
 
-默认数据目录是 `D:\SoftWareDocuments\WeChatDownLoad\xwechat_files`。
+首次启动不会使用开发者电脑的路径。应用会自动检查微信的当前用户注册表路径、Windows
+实际“文档”目录、OneDrive 重定向文档、AppData 中的兼容路径、
+`Documents/xwechat_files`、`Documents/WeChat Files/xwechat_files` 和各本地
+磁盘的标准微信目录；选择过的有效目录会作为当前用户设置保存。若微信把数据迁移到了
+其他位置，可在首次连接页或“设置 → 账号与存储”手动选择 `xwechat_files`、
+`WeChat Files` 或单个 `wxid_*` 账号目录，应用会校验并归一化为真实数据根目录。
 
 使用顺序：
 
-1. 应用自动恢复上次账号；已有有效密钥时不会再次触发 UAC。
-2. 在“会话浏览”中筛选、预览并选择会话。
-3. 在“归档设置”中选择输出目录、格式和媒体策略；规模会自动更新。
-4. 需要时在“媒体完整性”手动扫描整个账号，或在“全局搜索”按需搜索正文。
+1. 应用自动定位微信数据并展示候选目录；没有命中时手动选择目录。
+2. 顶部账号切换器选择当前账号；已有有效密钥时不会再次触发 UAC。
+3. 未授权账号在“设置 → 账号与存储”执行一次“授权读取”。
+4. 在“会话浏览”中筛选、预览并选择会话，再到“导出工作台”确认输出。
+5. 需要时在“媒体完整性”扫描当前账号，或在“全局搜索”按需搜索正文。
+
+会话、统计、选择状态和任务历史均跟随当前账号切换；任务历史按账号隔离展示，避免把
+另一个账号的结果误认为当前账号数据。
 
 历史账号必须先在微信中切换并登录，确保对应运行时密钥存在，再重新授权。密钥覆盖
 不完整时默认禁止导出；勾选“允许部分导出”后才会跳过缺少密钥的消息分片。
@@ -93,30 +103,33 @@ corepack pnpm install
 corepack pnpm test
 corepack pnpm typecheck
 corepack pnpm build
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
 测试使用合成密钥、数据库页、WAL、schema 和媒体，不读取真实聊天正文，也不会触发
 真实微信进程内存扫描。
 
-前端开发服务器使用 Mock Desktop Bridge；生产应用始终调用 pywebview 注入的结构化
-Bridge。用户运行生产版本不需要安装 Node.js，Node 仅用于开发构建和可选语音解码。
+前端开发服务器使用 Mock Bridge；Tauri 开发/生产窗口调用 Rust 命令，再由同一状态化
+Python sidecar 执行结构化 Bridge。用户运行生产版本不需要安装 Python、Rust 或 Node.js；
+后端、Node 语音运行时和 FFmpeg 都随安装包提供。
 
 ## 架构与安装版
 
-工程保持模块化桌面单体：`desktop` 负责启动、Bridge 和冻结资源，`application` 暴露
-用例门面，`domain` 与 `infrastructure` 承载规则和平台能力，导出/媒体模块独立演进；
-React 前端按应用外壳、页面、通用 UI 和 Zustand 状态切片拆分。现有 Bridge 方法保持
-兼容，因此常规功能修改不需要同步重写桌面壳和所有页面。
+工程保持模块化桌面单体：`frontend/src-tauri` 负责窗口、权限、原生目录选择和 Python
+sidecar 生命周期，`desktop/bridge.py` 保持稳定 RPC 合约，`application` 暴露用例门面，
+`domain` 与 `infrastructure` 承载规则和平台能力，导出/媒体模块独立演进；React 前端按
+应用外壳、页面、通用 UI 和 Zustand 状态切片拆分。
 
-构建安装器前会在仓库外临时目录生成 PyInstaller onedir staging；onedir 不是用户交付格式：
+构建安装器前会用 PyInstaller 生成单文件 Python sidecar，再由 Tauri 生成当前用户 NSIS
+安装包；sidecar 和运行时 staging 都不是独立交付格式：
 
 ```powershell
 python -m pip install ".[test,build]"
 powershell -ExecutionPolicy Bypass -File scripts\Build-Installer.ps1
 ```
 
-构建脚本在仓库外的临时目录工作，验证前端、Python、工程记忆、锁定的 Node/FFmpeg、
-NSIS，并执行冻结版和隔离安装后的 `--self-test`。本地正式覆盖要求工作区已经提交且干净：
+构建脚本验证 React、Python、Rust/Tauri、工程记忆、锁定的 Node/FFmpeg，并执行冻结
+sidecar 的 `--self-test`。本地正式覆盖要求工作区已经提交且干净：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
@@ -131,7 +144,9 @@ artifacts/发布版本/
 
 artifacts/安装版/ChatWechat/
   ChatWechat.exe
-  Uninstall.exe
+  chatwechat-backend.exe
+  runtime/
+  uninstall.exe
   ...
 ```
 

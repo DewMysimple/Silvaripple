@@ -35,15 +35,14 @@ class RuntimeLocator:
     def frozen(self) -> bool:
         return bool(getattr(sys, "frozen", False))
 
-    def web_index(self) -> Path:
-        return self.package_dir / "web" / "index.html"
-
     def vendor_file(self, *parts: str) -> Path:
         return self.package_dir.joinpath("vendor", *parts)
 
     def bundled_tool(self, name: str) -> Path | None:
         executable = f"{name}.exe" if os.name == "nt" and not name.casefold().endswith(".exe") else name
+        resource_dir = Path(os.environ["CHATWECHAT_RESOURCE_DIR"]) if os.environ.get("CHATWECHAT_RESOURCE_DIR") else None
         candidates = (
+            *((resource_dir / "runtime" / name / executable, resource_dir / "runtime" / executable) if resource_dir else ()),
             self.executable_dir / "runtime" / name / executable,
             self.executable_dir / "runtime" / executable,
             self.bundle_dir / "runtime" / name / executable,

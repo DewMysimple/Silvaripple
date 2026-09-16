@@ -1,3 +1,5 @@
+import { invoke as invokeTauri } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import type {
   AccountStatisticsReport,
   Bootstrap,
@@ -14,9 +16,7 @@ type Envelope<T> =
 
 declare global {
   interface Window {
-    pywebview?: {
-      api: Record<string, (...args: unknown[]) => Promise<Envelope<unknown>>>;
-    };
+    __TAURI_INTERNALS__?: unknown;
   }
 }
 
@@ -26,7 +26,7 @@ const mockAccount = {
   active: true,
   size_bytes: 5583457484,
   database_count: 11,
-  directory: "D:\\WeChat",
+  directory: "系统文档\\WeChat Files\\xwechat_files\\wxid_example",
   coverage: { covered: 11, total: 11, complete: true, missing_databases: [] },
 };
 const mockConversations: Conversation[] = [
@@ -54,8 +54,9 @@ const mockConversations: Conversation[] = [
 ];
 const requestedMockTheme = new URLSearchParams(location.search).get("theme");
 const mockSettings = {
-  data_root: "D:\\WeChat\\xwechat_files",
-  output_directory: "C:\\Users\\User\\Desktop",
+  data_root: "系统文档\\WeChat Files\\xwechat_files",
+  data_root_mode: "auto" as const,
+  output_directory: "桌面\\ChatWechat 导出",
   theme: (requestedMockTheme === "dark" || requestedMockTheme === "light"
     ? requestedMockTheme
     : "system") as "system" | "light" | "dark",
@@ -83,10 +84,49 @@ const mockApi: Record<
       settings: mockSettings,
       accounts: [mockAccount],
       selected_account_id: "mock-account",
+      data_roots: [
+        {
+          path: mockSettings.data_root,
+          source: "documents",
+          account_count: 1,
+          selected: true,
+        },
+      ],
       capabilities: { offline: true, dpapi: true },
     } satisfies Bootstrap,
   }),
   scan_accounts: async () => ({ ok: true, data: { accounts: [mockAccount] } }),
+  scan_data_roots: async () => ({
+    ok: true,
+    data: {
+      items: [
+        {
+          path: mockSettings.data_root,
+          source: "documents",
+          account_count: 1,
+          selected: true,
+        },
+      ],
+      selected_path: mockSettings.data_root,
+      mode: "auto",
+    },
+  }),
+  set_data_root: async (path) => ({
+    ok: true,
+    data: {
+      settings: { ...mockSettings, data_root: String(path), data_root_mode: "manual" },
+      accounts: [mockAccount],
+      data_roots: [],
+    },
+  }),
+  use_auto_data_root: async () => ({
+    ok: true,
+    data: {
+      settings: mockSettings,
+      accounts: [mockAccount],
+      data_roots: [],
+    },
+  }),
   list_conversations: async () => ({
     ok: true,
     data: {
@@ -352,65 +392,32 @@ const mockApi: Record<
   authorize_account: async () => ({ ok: true, data: { account: mockAccount } }),
 };
 
-const BRIDGE_TIMEOUT_MS = 15_000;
-
-/**
- * pywebview dispatches `pywebviewready` on `window`.  Older builds listened on
- * `document`, so a fast host could fire the event before React subscribed and
- * leave the splash screen waiting forever.  Polling also covers WebView2
- * versions which install `window.pywebview` immediately before/after the event.
- */
-async function ready(method: string): Promise<void> {
-  if (typeof window.pywebview?.api?.[method] === "function") return;
-  if (import.meta.env.DEV) return;
-
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      window.removeEventListener("pywebviewready", onReady);
-      document.removeEventListener("pywebviewready", onReady);
-      clearInterval(poll);
-      clearTimeout(timeout);
-      error ? reject(error) : resolve();
-    };
-    const onReady = () => {
-      if (typeof window.pywebview?.api?.[method] === "function") finish();
-    };
-    const poll = window.setInterval(() => {
-      if (typeof window.pywebview?.api?.[method] === "function") finish();
-    }, 50);
-    const timeout = window.setTimeout(
-      () =>
-        finish(
-          new Error("桌面服务连接超时。请关闭旧窗口后重新启动 ChatWechat。"),
-        ),
-      BRIDGE_TIMEOUT_MS,
-    );
-
-    window.addEventListener("pywebviewready", onReady);
-    // Retain document support for older pywebview releases.
-    document.addEventListener("pywebviewready", onReady);
-    onReady();
-  });
-}
+const hasTauriBridge = () => Boolean(window.__TAURI_INTERNALS__);
 
 export async function invoke<T>(
   method: string,
   ...args: unknown[]
 ): Promise<T> {
-  await ready(method);
-  const api = import.meta.env.DEV
-    ? (window.pywebview?.api ?? mockApi)
-    : window.pywebview?.api;
-  if (!api)
-    throw new Error("桌面服务尚未就绪。请关闭旧窗口后重新启动 ChatWechat。");
-  const fn = api[method];
-  if (!fn) throw new Error(`桌面接口不可用：${method}`);
-  const envelope = (await fn(...args)) as Envelope<T>;
+  let envelope: Envelope<T>;
+  if (hasTauriBridge()) {
+    if (method === "choose_folder") {
+      const path = await open({ directory: true, multiple: false });
+      envelope = { ok: true, data: { path } as T };
+    } else {
+      envelope = await invokeTauri<Envelope<T>>("bridge_invoke", {
+        method,
+        args,
+      });
+    }
+  } else if (import.meta.env.DEV) {
+    const fn = mockApi[method];
+    if (!fn) throw new Error(`桌面接口不可用：${method}`);
+    envelope = (await fn(...args)) as Envelope<T>;
+  } else {
+    throw new Error("Tauri 桌面服务尚未就绪。请重新启动 ChatWechat。");
+  }
   if (!envelope.ok) throw new Error(envelope.error || "操作失败");
   return envelope.data;
 }
 
-export const isMockBridge = () => !window.pywebview?.api;
+export const isMockBridge = () => !hasTauriBridge();

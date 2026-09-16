@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot,
     [switch]$SkipFrontendInstall
 )
 
@@ -13,6 +13,7 @@ function Assert-ExitCode([string]$Step) {
     }
 }
 
+if (-not $RepositoryRoot) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 $root = [IO.Path]::GetFullPath($RepositoryRoot)
 Push-Location $root
 $savedCi = $env:CI
@@ -32,9 +33,18 @@ try {
     corepack pnpm@10.34.5 --dir frontend build
     Assert-ExitCode "React production build"
 
-    python wiki-memory/工具/memory_lint.py index
+    cargo fmt --manifest-path frontend/src-tauri/Cargo.toml -- --check
+    Assert-ExitCode "Rust formatting"
+    cargo test --manifest-path frontend/src-tauri/Cargo.toml
+    Assert-ExitCode "Tauri Rust tests"
+    cargo check --manifest-path frontend/src-tauri/Cargo.toml
+    Assert-ExitCode "Tauri Rust check"
+
+    $memoryLint = Get-ChildItem -LiteralPath (Join-Path $root "wiki-memory") -Filter "memory_lint.py" -File -Recurse | Select-Object -First 1
+    if (-not $memoryLint) { throw "Memory lint tool was not found." }
+    python $memoryLint.FullName index
     Assert-ExitCode "Memory index"
-    python wiki-memory/工具/memory_lint.py check
+    python $memoryLint.FullName check
     Assert-ExitCode "Memory lint"
 }
 finally {

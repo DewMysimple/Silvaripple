@@ -3,12 +3,57 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import ctypes
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 
 APP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "ChatWechat"
+
+
+def windows_documents_directory() -> Path:
+    """Resolve the real Windows Documents known folder without assuming C:\\Users."""
+    if os.name == "nt":
+        # FOLDERID_Documents.  SHGetKnownFolderPath follows OneDrive and other
+        # shell-folder redirections, unlike ``Path.home() / 'Documents'``.
+        class GUID(ctypes.Structure):
+            _fields_ = [
+                ("data1", ctypes.c_uint32),
+                ("data2", ctypes.c_uint16),
+                ("data3", ctypes.c_uint16),
+                ("data4", ctypes.c_ubyte * 8),
+            ]
+
+        folder_id = uuid.UUID("fdd39ad0-238f-46af-adb4-6c85480369c7")
+        guid = GUID.from_buffer_copy(folder_id.bytes_le)
+        value = ctypes.c_wchar_p()
+        try:
+            function = ctypes.windll.shell32.SHGetKnownFolderPath  # type: ignore[attr-defined]
+            function.argtypes = [
+                ctypes.POINTER(GUID),
+                ctypes.c_uint32,
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_wchar_p),
+            ]
+            function.restype = ctypes.c_long
+            result = function(
+                ctypes.byref(guid), 0, None, ctypes.byref(value)
+            )
+            if result == 0 and value.value:
+                return Path(value.value)
+        except (AttributeError, OSError, ValueError):
+            pass
+        finally:
+            if value.value:
+                try:
+                    free = ctypes.windll.ole32.CoTaskMemFree  # type: ignore[attr-defined]
+                    free.argtypes = [ctypes.c_void_p]
+                    free(value)
+                except (AttributeError, OSError):
+                    pass
+    return Path.home() / "Documents"
 
 
 def default_data_root() -> str:
@@ -19,8 +64,9 @@ def default_data_root() -> str:
     drive and username while still providing a sensible first location on a
     new computer.
     """
-    documents = Path.home() / "Documents"
+    documents = windows_documents_directory()
     candidates = (
+        documents / "xwechat_files",
         documents / "WeChat Files" / "xwechat_files",
         documents / "WeChat Files",
     )
@@ -30,6 +76,7 @@ def default_data_root() -> str:
 @dataclass(slots=True)
 class Settings:
     data_root: str = field(default_factory=default_data_root)
+    data_root_mode: str = "auto"
     output_directory: str = str(Path.home() / "Desktop")
     theme: str = "system"
     conversation_kind: str = "all"
@@ -56,6 +103,8 @@ class Settings:
             cleaned["density"] = "comfortable"
         if cleaned.get("export_folder_layout") not in {"flat", "by_type", "account_by_type"}:
             cleaned["export_folder_layout"] = "by_type"
+        if cleaned.get("data_root_mode") not in {"auto", "manual"}:
+            cleaned["data_root_mode"] = "auto"
         for key, default in (
             ("download_missing_media_default", True),
             ("allow_legacy_http_media_default", True),

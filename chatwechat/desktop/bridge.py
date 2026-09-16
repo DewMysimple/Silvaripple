@@ -1,8 +1,7 @@
-"""Typed pywebview adapter around the application service facade."""
+"""Typed JSON adapter around the application service facade."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from ..redaction import redact
@@ -24,6 +23,15 @@ class Bridge:
 
     def scan_accounts(self) -> dict[str, Any]:
         return self._safe(self.service.scan_accounts)
+
+    def scan_data_roots(self) -> dict[str, Any]:
+        return self._safe(self.service.scan_data_roots)
+
+    def set_data_root(self, path: str) -> dict[str, Any]:
+        return self._safe(lambda: self.service.set_data_root(path))
+
+    def use_auto_data_root(self) -> dict[str, Any]:
+        return self._safe(self.service.use_auto_data_root)
 
     def authorize_account(self, account_id: str) -> dict[str, Any]:
         return self._safe(lambda: self.service.authorize_account(account_id))
@@ -61,14 +69,14 @@ class Bridge:
     def get_account_statistics(self, account_id: str) -> dict[str, Any]:
         return self._safe(lambda: self.service.get_account_statistics(account_id))
 
-    def list_operation_history(self) -> dict[str, Any]:
-        return self._safe(self.service.list_operation_history)
+    def list_operation_history(self, account_id: str | None = None) -> dict[str, Any]:
+        return self._safe(lambda: self.service.list_operation_history(account_id))
 
-    def clear_operation_history(self) -> dict[str, Any]:
-        return self._safe(self.service.clear_operation_history)
+    def clear_operation_history(self, account_id: str | None = None) -> dict[str, Any]:
+        return self._safe(lambda: self.service.clear_operation_history(account_id))
 
-    def clear_abnormal_operation_history(self) -> dict[str, Any]:
-        return self._safe(self.service.clear_abnormal_operation_history)
+    def clear_abnormal_operation_history(self, account_id: str | None = None) -> dict[str, Any]:
+        return self._safe(lambda: self.service.clear_abnormal_operation_history(account_id))
 
     def delete_operation_history_entry(self, history_id: str) -> dict[str, Any]:
         return self._safe(lambda: self.service.delete_operation_history_entry(history_id))
@@ -95,16 +103,9 @@ class Bridge:
         return self._safe(lambda: self.service.open_result_folder(value))
 
     def choose_folder(self) -> dict[str, Any]:
-        def choose() -> dict[str, Any]:
-            import webview
-
-            result = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
-            path = str(result[0]) if result else None
-            if path:
-                self.service.approved_output_dirs.add(str(Path(path).resolve()))
-            return {"path": path}
-
-        return self._safe(choose)
+        # Tauri owns native dialogs.  This method remains in the stable bridge
+        # contract for old callers; the React adapter intercepts it before RPC.
+        return self._safe(lambda: {"path": None})
 
     def save_settings(self, value: dict[str, Any]) -> dict[str, Any]:
         return self._safe(lambda: self.service.save_settings(value))

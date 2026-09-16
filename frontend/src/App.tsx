@@ -1588,7 +1588,7 @@ function ConfirmDialog({
 }
 
 function TasksView() {
-  const { history, operations, refreshHistory } = useWorkbench();
+  const { history, operations, refreshHistory, account } = useWorkbench();
   const active = Object.values(operations).filter((item) =>
     ["pending", "running"].includes(item.status),
   );
@@ -1704,6 +1704,7 @@ function TasksView() {
           mode === "all"
             ? "clear_operation_history"
             : "clear_abnormal_operation_history",
+          account?.account_id,
         );
         setSelectedHistory([]);
         await refreshHistory();
@@ -2134,14 +2135,22 @@ function AccountCard({ item }: { item: Account }) {
 }
 
 function SettingsView() {
-  const { settings, accounts, saveSettings, initialize } = useWorkbench();
+  const {
+    settings,
+    accounts,
+    dataRoots,
+    saveSettings,
+    initialize,
+    selectDataRoot,
+    useAutoDataRoot,
+    refreshDataRoots,
+  } = useWorkbench();
   if (!settings) return null;
   const set = (value: Partial<Settings>) => void saveSettings(value);
   const chooseDataRoot = async () => {
     const data = await invoke<{ path?: string }>("choose_folder");
     if (!data.path) return;
-    await saveSettings({ data_root: data.path, last_account_id: "" });
-    await initialize();
+    await selectDataRoot(data.path);
   };
   const layouts: Array<{
     value: ExportFolderLayout;
@@ -2225,19 +2234,51 @@ function SettingsView() {
             {accounts.map((item) => (
               <AccountCard item={item} key={item.account_id} />
             ))}
+            {!accounts.length && (
+              <div className="settings-account-empty">
+                <strong>当前目录没有可用账号</strong>
+                <span>可从自动发现结果中选择，或手动定位微信数据目录。</span>
+              </div>
+            )}
           </div>
           <div className="setting-row path-row">
             <div>
               <strong>微信数据根目录</strong>
-              <span>{settings.data_root}</span>
+              <span>
+                {settings.data_root} · {settings.data_root_mode === "auto" ? "自动发现" : "手动选择"}
+              </span>
             </div>
-            <button
-              className="secondary compact"
-              onClick={() => void chooseDataRoot()}
-            >
-              更改
-            </button>
+            <div className="path-actions">
+              <button className="secondary compact" onClick={() => void refreshDataRoots()}>
+                重新检测
+              </button>
+              <button className="secondary compact" onClick={() => void chooseDataRoot()}>
+                选择目录
+              </button>
+            </div>
           </div>
+          {dataRoots.length > 0 && (
+            <div className="data-root-candidates">
+              <div>
+                <strong>检测到的微信数据</strong>
+                <button className="text-button" onClick={() => void useAutoDataRoot()}>
+                  使用自动选择
+                </button>
+              </div>
+              {dataRoots.map((candidate) => (
+                <button
+                  type="button"
+                  className={candidate.selected ? "selected" : ""}
+                  key={candidate.path}
+                  onClick={() => void selectDataRoot(candidate.path)}
+                >
+                  <FolderOpen size={17} />
+                  <span><strong>{candidate.account_count} 个账号</strong><small>{candidate.path}</small></span>
+                  <em>{candidate.selected ? "当前" : "使用"}</em>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="setting-row path-row">
             <div>
               <strong>默认输出目录</strong>
@@ -2473,6 +2514,7 @@ export default function App() {
     view,
     settings,
     sidebarCollapsed,
+    account,
   } = useWorkbench();
   useEffect(() => {
     void initialize();
@@ -2520,7 +2562,7 @@ export default function App() {
       <main id="main-content" className="main-canvas">
         <ModularTopbar />
         <ErrorBanner />
-        <div className="view-content" key={view}>
+        <div className="view-content" key={`${view}:${account?.account_id || "none"}`}>
           {content}
         </div>
       </main>

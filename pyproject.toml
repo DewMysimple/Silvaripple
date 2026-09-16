@@ -8,7 +8,6 @@ version = "0.2.0"
 description = "Offline, manual WeChat chat export workbench for Windows"
 requires-python = ">=3.11"
 dependencies = [
-  "pywebview>=6.2,<7",
   "cryptography>=44",
   "zstandard>=0.23",
   "Pillow>=11,<13",
@@ -29,4 +28,4 @@ addopts = "-q"
 include = ["chatwechat*"]
 
 [tool.setuptools.package-data]
-chatwechat = ["web/*", "web/assets/*", "vendor/silk-wasm/*"]
+chatwechat = ["vendor/silk-wasm/*"]

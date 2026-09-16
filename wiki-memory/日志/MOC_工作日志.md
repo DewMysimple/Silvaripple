@@ -3,7 +3,7 @@ type: moc
 status: active
 kind: process
 importance: high
-updated: 2026-08-24
+updated: 2026-09-17
 topic: work-log-index
 source_logs: []
 supersedes: null
@@ -13,6 +13,7 @@ supersedes: null
 
 | 时间 | 类型 | 目标 | 状态 | 主题 | 日志 |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-17 | architecture | - | archived | tauri-migration-and-account-discovery | [[日志/2026-09-16-Tauri架构与多账号数据发现|2026-09-16｜Tauri 架构与多账号数据发现]] |
 | 2026-08-24 | maintenance | 移除根目录启动脚本，统一源码入口，并把本地安装版产物收回工程内；不再保留便携交付物。 | archived | repository-layout-and-artifacts | [[日志/2026-08-24-工程目录与发布产物整理|2026-08-24｜工程目录与发布产物整理]] |
 | 2026-08-24 | maintenance | - | archived | readme-positioning | [[日志/2026-08-24-README产品定位措辞调整|README 产品定位措辞调整]] |
 | 2026-08-24 | maintenance | - | archived | in-repository-installed-artifacts | [[日志/2026-08-24-工程内安装实例与发布资产收敛|2026-08-24｜工程内安装实例与发布资产收敛]] |

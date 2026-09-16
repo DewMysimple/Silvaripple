@@ -88,14 +88,14 @@ export function Sidebar() {
         </span>
       </section>
       <p className="build-label">
-        DESKTOP BRIDGE · {isMockBridge() ? "MOCK" : "OFFLINE"}
+        TAURI DESKTOP · {isMockBridge() ? "MOCK" : "OFFLINE"}
       </p>
     </aside>
   );
 }
 
 export function Topbar() {
-  const { view, settings, setView } = useWorkbench();
+  const { view, settings, setView, accounts, account, selectAccount } = useWorkbench();
   const [title, subtitle] = pageCopy[view];
   const ThemeIcon =
     settings?.theme === "dark"
@@ -110,6 +110,35 @@ export function Topbar() {
         <h1>{title}</h1>
       </div>
       <div className="topbar-actions">
+        {accounts.length > 0 && (
+          <label className="account-switcher" title="切换当前微信账号">
+            <span className="account-switcher-avatar">
+              {account?.avatar_data_url ? (
+                <img src={account.avatar_data_url} alt="" />
+              ) : (
+                account?.display_name.slice(0, 1) || "微"
+              )}
+            </span>
+            <span className="account-switcher-copy">
+              <small>当前账号</small>
+              <strong>{account?.display_name || "选择账号"}</strong>
+            </span>
+            <select
+              aria-label="切换当前微信账号"
+              value={account?.account_id || ""}
+              onChange={(event) => {
+                const next = accounts.find((item) => item.account_id === event.target.value);
+                if (next) void selectAccount(next);
+              }}
+            >
+              {accounts.map((item) => (
+                <option value={item.account_id} key={item.account_id}>
+                  {item.display_name}{item.coverage.complete ? " · 已就绪" : " · 待授权"}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="privacy-chip">
           <ShieldCheck size={15} />
           只读快照

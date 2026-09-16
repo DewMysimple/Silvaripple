@@ -9,9 +9,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build --config src-tauri/tauri.bundle.conf.json"
   },
   "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.3",
     "lucide-react": "1.24.0",
     "motion": "12.42.2",
     "react": "19.2.7",
@@ -19,6 +23,7 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
     "@types/node": "24.10.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",

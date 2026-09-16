@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot,
     [string]$InstallerOutput,
     [string]$InstalledRoot,
     [string]$NsisCompiler,
@@ -50,18 +50,21 @@ function Replace-FileAtomically([string]$StagedFile, [string]$Destination) {
     }
 }
 
-function Invoke-WindowedSelfTest([string]$Executable, [string]$OutputPath) {
+function Invoke-WindowedSelfTest([string]$Executable, [string]$OutputPath, [string]$ResourceRoot) {
     $info = [Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $Executable
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
     $info.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
-    foreach ($argument in @("--self-test", "--json", "--output", $OutputPath)) { [void]$info.ArgumentList.Add($argument) }
+    $escapedOutput = $OutputPath.Replace('"', '\"')
+    $info.Arguments = "--self-test --json --output `"$escapedOutput`""
+    $info.Environment["CHATWECHAT_RESOURCE_DIR"] = $ResourceRoot
     $process = [Diagnostics.Process]::Start($info)
     $process.WaitForExit()
     return $process.ExitCode
 }
 
+if (-not $RepositoryRoot) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 $root = [IO.Path]::GetFullPath($RepositoryRoot)
 $artifactRoot = Join-Path $root "artifacts\发布版本"
 if (-not $InstalledRoot) { $InstalledRoot = Join-Path $root "artifacts\安装版\ChatWechat" }
@@ -75,7 +78,7 @@ Assert-ChildPath $installArtifactRoot $InstalledRoot
 
 $dirty = git -C $root status --porcelain
 Assert-ExitCode "Git status"
-if ($dirty) { throw "Local publishing requires a clean Git worktree so the source ZIP matches the tested commit." }
+if ($dirty) { throw "Local publishing requires a clean Git worktree so the installer matches the tested commit." }
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("ChatWechat-publish-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $stage | Out-Null
@@ -111,8 +114,13 @@ try {
         if ($installProcess.ExitCode -ne 0) { throw "工程内安装失败，退出码 $($installProcess.ExitCode)。" }
         $installedExecutable = Join-Path $InstalledRoot "ChatWechat.exe"
         if (-not (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) { throw "工程内安装缺少 ChatWechat.exe。" }
+        $installedBackend = Get-ChildItem -LiteralPath $InstalledRoot -Filter "chatwechat-backend.exe" -File -Recurse | Select-Object -First 1
+        if (-not $installedBackend) { throw "工程内安装缺少 Python 后端 sidecar。" }
+        $installedNode = Get-ChildItem -LiteralPath $InstalledRoot -Filter "node.exe" -File -Recurse | Where-Object { $_.FullName -like "*runtime*node*" } | Select-Object -First 1
+        if (-not $installedNode) { throw "工程内安装缺少 Node 运行时。" }
+        $resourceRoot = $installedNode.Directory.Parent.Parent.FullName
         $installedSelfTest = Join-Path $stage "project-installed-self-test.json"
-        $selfTestExit = Invoke-WindowedSelfTest $installedExecutable $installedSelfTest
+        $selfTestExit = Invoke-WindowedSelfTest $installedBackend.FullName $installedSelfTest $resourceRoot
         if ($selfTestExit -ne 0) { throw "工程内安装版自检失败，退出码 $selfTestExit。" }
         $selfTest = Get-Content -Raw -LiteralPath $installedSelfTest | ConvertFrom-Json
         if (-not $selfTest.ok -or -not $selfTest.frozen) { throw "工程内安装版未通过冻结模式自检。" }

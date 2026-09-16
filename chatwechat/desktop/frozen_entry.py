@@ -1,4 +1,4 @@
-"""PyInstaller entry point for the windowed ChatWechat executable."""
+"""PyInstaller entry point for the ChatWechat backend sidecar."""
 
 from chatwechat.desktop.entrypoint import main
 

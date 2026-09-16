@@ -54,7 +54,6 @@ def self_test(locator: RuntimeLocator | None = None) -> dict[str, Any]:
     bundled_node = locator.bundled_tool("node")
     bundled_ffmpeg = locator.bundled_tool("ffmpeg")
     checks = {
-        "web_assets": locator.web_index().is_file(),
         "silk_wasm": locator.vendor_file("silk-wasm", "silk.wasm").is_file(),
         "node": bool(node),
         "ffmpeg": bool(ffmpeg),
@@ -65,7 +64,7 @@ def self_test(locator: RuntimeLocator | None = None) -> dict[str, Any]:
         "service_init": service_init,
     }
     required = (
-        "web_assets", "silk_wasm", "node", "ffmpeg", "windows",
+        "silk_wasm", "node", "ffmpeg", "windows",
         "webview2", "cng", "dpapi", "service_init",
     )
     return {

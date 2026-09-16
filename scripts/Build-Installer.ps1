@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot,
     [string]$OutputRoot,
     [string]$NsisCompiler,
     [string]$NodeExecutable,
@@ -16,167 +16,124 @@ function Assert-ExitCode([string]$Step) {
     if ($LASTEXITCODE -ne 0) { throw "$Step failed with exit code $LASTEXITCODE." }
 }
 
-function Assert-ChildPath([string]$Parent, [string]$Child) {
-    $parentFull = [IO.Path]::GetFullPath($Parent).TrimEnd('\') + '\'
-    $childFull = [IO.Path]::GetFullPath($Child)
-    if (-not $childFull.StartsWith($parentFull, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to operate outside the expected parent: $childFull"
+function Assert-LockedFile([string]$Path, [object]$Expected) {
+    $item = Get-Item -LiteralPath $Path -ErrorAction Stop
+    if ($item.Name -cne [string]$Expected.name -or $item.Length -ne [int64]$Expected.size) {
+        throw "Runtime file does not match the lock: $($item.Name)."
     }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $item.FullName).Hash.ToLowerInvariant()
+    if ($actual -cne [string]$Expected.sha256) { throw "Runtime SHA-256 mismatch: $($item.Name)." }
 }
 
-function Read-InstallerLock([string]$Root) {
-    return Get-Content -Raw -LiteralPath (Join-Path $Root "packaging\installer.lock.json") | ConvertFrom-Json
-}
-
-function Find-NsisCompiler([string]$Requested, [object]$Lock, [string]$Stage) {
-    if ($Requested) {
-        $candidate = [IO.Path]::GetFullPath($Requested)
-        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "NSIS compiler was not found: $candidate" }
-        return $candidate
-    }
-    $command = Get-Command makensis.exe -ErrorAction SilentlyContinue
-    if ($command) { return $command.Source }
-    foreach ($candidate in @(
-        "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
-        "$env:ProgramFiles\NSIS\Bin\makensis.exe",
-        "$env:LOCALAPPDATA\Programs\NSIS\Bin\makensis.exe",
-        "$env:LOCALAPPDATA\tauri\NSIS\Bin\makensis.exe"
-    )) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
-    }
-
-    $cache = Join-Path ([IO.Path]::GetTempPath()) ("ChatWechat-nsis-" + [string]$Lock.nsis.version)
-    $archive = Join-Path $cache ("nsis-" + [string]$Lock.nsis.version + ".zip")
-    $extract = Join-Path $cache "extracted"
-    $compiler = Join-Path $extract ([string]$Lock.nsis.compiler_relative_path)
-    New-Item -ItemType Directory -Force -Path $cache | Out-Null
-    if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
-        if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
-            Write-Host "Downloading pinned NSIS $($Lock.nsis.version)..."
-            Invoke-WebRequest -Uri ([string]$Lock.nsis.source) -OutFile $archive
-        }
-        $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-        if ($hash -cne [string]$Lock.nsis.sha256) {
-            throw "NSIS archive SHA-256 mismatch: $hash"
-        }
-        if (Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
-        Expand-Archive -LiteralPath $archive -DestinationPath $extract
-    }
-    if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
-        throw "Pinned NSIS archive does not contain $($Lock.nsis.compiler_relative_path)."
-    }
-    return [IO.Path]::GetFullPath($compiler)
-}
-
-function Assert-NsisVersion([string]$Compiler, [object]$Lock) {
-    $reported = (& $Compiler /VERSION 2>&1 | Select-Object -Last 1).ToString().Trim()
-    Assert-ExitCode "NSIS version check"
-    if ($reported -cne "v$([string]$Lock.nsis.version)") {
-        throw "NSIS version does not match installer.lock.json: $reported"
-    }
-}
-
-function Invoke-WindowedProcess([string]$FilePath, [string[]]$Arguments, [string]$LocalAppData, [string]$PathValue) {
+function Invoke-BackendSelfTest([string]$Executable, [string]$Output, [string]$LocalAppData, [string]$ResourceDir) {
     $info = [Diagnostics.ProcessStartInfo]::new()
-    $info.FileName = $FilePath
+    $info.FileName = $Executable
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
     $info.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
-    foreach ($argument in $Arguments) { [void]$info.ArgumentList.Add($argument) }
+    $escapedOutput = $Output.Replace('"', '\"')
+    $info.Arguments = "--self-test --json --output `"$escapedOutput`""
     $info.Environment["LOCALAPPDATA"] = $LocalAppData
-    $info.Environment["PATH"] = $PathValue
+    $info.Environment["CHATWECHAT_RESOURCE_DIR"] = $ResourceDir
+    $info.Environment["PATH"] = "$env:SystemRoot\System32;$env:SystemRoot"
     $process = [Diagnostics.Process]::Start($info)
     $process.WaitForExit()
     return $process.ExitCode
 }
 
-function Invoke-Nsis([string]$Compiler, [string]$Script, [string]$Version, [string]$StagingRoot, [string]$Output, [string]$IconFile, [switch]$SkipMigration, [switch]$SkipShortcuts) {
-    $arguments = @(
-        "/V2",
-        "/DAPP_VERSION=$Version",
-        "/DSTAGING_ROOT=$StagingRoot",
-        "/DOUTPUT_FILE=$Output",
-        "/DICON_FILE=$IconFile"
-    )
-    if ($SkipMigration) { $arguments += "/DSKIP_LEGACY_MIGRATION" }
-    if ($SkipShortcuts) { $arguments += "/DSKIP_SHORTCUTS" }
-    $arguments += $Script
-    & $Compiler @arguments
-    Assert-ExitCode "NSIS installer build"
-    if (-not (Test-Path -LiteralPath $Output -PathType Leaf)) { throw "NSIS did not produce an installer: $Output" }
-}
-
+if (-not $RepositoryRoot) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 $root = [IO.Path]::GetFullPath($RepositoryRoot)
-if (-not (Test-Path -LiteralPath (Join-Path $root "pyproject.toml") -PathType Leaf)) {
-    throw "RepositoryRoot is not a ChatWechat source tree: $root"
+if (-not (Test-Path -LiteralPath (Join-Path $root "frontend\src-tauri\tauri.conf.json") -PathType Leaf)) {
+    throw "RepositoryRoot is not a Tauri ChatWechat source tree: $root"
 }
 if (-not $OutputRoot) {
-    $OutputRoot = Join-Path ([IO.Path]::GetTempPath()) ("ChatWechat-installer-" + [guid]::NewGuid().ToString("N"))
+    $OutputRoot = Join-Path ([IO.Path]::GetTempPath()) ("ChatWechat-tauri-" + [guid]::NewGuid().ToString("N"))
 }
 $stage = [IO.Path]::GetFullPath($OutputRoot)
 if (Test-Path -LiteralPath $stage) { throw "Build staging path already exists: $stage" }
 New-Item -ItemType Directory -Path $stage | Out-Null
 
-$lock = Read-InstallerLock $root
-$buildStage = Join-Path $stage "application-build"
-$buildResultPath = & (Join-Path $root "scripts\Build-AppStaging.ps1") `
-    -RepositoryRoot $root `
-    -OutputRoot $buildStage `
-    -NodeExecutable $NodeExecutable `
-    -FfmpegBinDirectory $FfmpegBinDirectory `
-    -SkipQualityGate:$SkipQualityGate `
-    -SkipFrontendInstall:$SkipFrontendInstall
-$buildResult = Get-Content -Raw -LiteralPath ($buildResultPath | Select-Object -Last 1) | ConvertFrom-Json
-$version = [string]$buildResult.version
-$installer = Join-Path $stage "ChatWechat-Setup.exe"
-$compiler = Find-NsisCompiler $NsisCompiler $lock $stage
-Assert-NsisVersion $compiler $lock
-$script = Join-Path $root "packaging\ChatWechat.nsi"
-$icon = Join-Path $root "packaging\ChatWechat.ico"
-if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "ChatWechat application icon is missing." }
-$stagingRoot = [IO.Path]::GetFullPath([string]$buildResult.application_root)
-Assert-ChildPath $stage $stagingRoot
-Invoke-Nsis $compiler $script $version $stagingRoot $installer $icon
+if (-not $SkipQualityGate) {
+    & (Join-Path $root "scripts\Invoke-QualityGate.ps1") -RepositoryRoot $root -SkipFrontendInstall:$SkipFrontendInstall
+}
 
-$testInstaller = Join-Path $stage "ChatWechat-Setup-test.exe"
-Invoke-Nsis $compiler $script $version $stagingRoot $testInstaller $icon -SkipMigration -SkipShortcuts
+$lock = Get-Content -Raw -LiteralPath (Join-Path $root "packaging\runtime.lock.json") | ConvertFrom-Json
+if (-not $NodeExecutable) { $NodeExecutable = (Get-Command node.exe -ErrorAction Stop).Source }
+$NodeExecutable = [IO.Path]::GetFullPath($NodeExecutable)
+if ((& $NodeExecutable --version).Trim() -ne "v$($lock.node.version)") { throw "Node version does not match runtime.lock.json." }
+Assert-LockedFile $NodeExecutable $lock.node.files[0]
 
-$isolatedInstall = Join-Path $stage "isolated-install"
+if (-not $FfmpegBinDirectory) { $FfmpegBinDirectory = Split-Path -Parent (Get-Command ffmpeg.exe -ErrorAction Stop).Source }
+$FfmpegBinDirectory = [IO.Path]::GetFullPath($FfmpegBinDirectory)
+$ffmpegExecutable = Join-Path $FfmpegBinDirectory "ffmpeg.exe"
+$ffmpegVersion = (& $ffmpegExecutable -version 2>&1 | Select-Object -First 1).ToString()
+if (-not $ffmpegVersion.StartsWith([string]$lock.ffmpeg.version_prefix, [StringComparison]::Ordinal)) { throw "FFmpeg version does not match runtime.lock.json." }
+foreach ($expected in $lock.ffmpeg.files) { Assert-LockedFile (Join-Path $FfmpegBinDirectory ([string]$expected.name)) $expected }
+$ffmpegLicense = Join-Path (Split-Path -Parent $FfmpegBinDirectory) ([string]$lock.ffmpeg.license.name)
+Assert-LockedFile $ffmpegLicense $lock.ffmpeg.license
+
+$resourceRoot = [IO.Path]::GetFullPath((Join-Path $root "frontend\src-tauri\resources"))
+$runtimeRoot = Join-Path $resourceRoot "runtime"
+if (Test-Path -LiteralPath $runtimeRoot) { Remove-Item -LiteralPath $runtimeRoot -Recurse -Force }
+$nodeTarget = Join-Path $runtimeRoot "node"
+$ffmpegTarget = Join-Path $runtimeRoot "ffmpeg"
+New-Item -ItemType Directory -Path $nodeTarget, $ffmpegTarget | Out-Null
+Copy-Item -LiteralPath $NodeExecutable -Destination (Join-Path $nodeTarget "node.exe")
+Copy-Item -LiteralPath (Join-Path $root "packaging\NODE-LICENSE.txt") -Destination (Join-Path $nodeTarget "LICENSE.txt")
+foreach ($expected in $lock.ffmpeg.files) { Copy-Item -LiteralPath (Join-Path $FfmpegBinDirectory ([string]$expected.name)) -Destination $ffmpegTarget }
+Copy-Item -LiteralPath $ffmpegLicense -Destination (Join-Path $ffmpegTarget "LICENSE.txt")
+
+$sidecar = (& (Join-Path $root "scripts\Build-TauriSidecar.ps1") -RepositoryRoot $root | Select-Object -Last 1)
 $isolatedLocalAppData = Join-Path $stage "isolated-localappdata"
 New-Item -ItemType Directory -Path $isolatedLocalAppData | Out-Null
-$savedLocalAppData = $env:LOCALAPPDATA
-$savedPath = $env:PATH
+$selfTestPath = Join-Path $stage "backend-self-test.json"
+$selfTestExit = Invoke-BackendSelfTest $sidecar $selfTestPath $isolatedLocalAppData $resourceRoot
+if ($selfTestExit -ne 0) { throw "Packaged backend self-test failed with exit code $selfTestExit." }
+$selfTest = Get-Content -Raw -LiteralPath $selfTestPath | ConvertFrom-Json
+if (-not $selfTest.ok -or -not $selfTest.frozen) { throw "Packaged backend did not pass frozen-mode self-test." }
+
+Push-Location (Join-Path $root "frontend")
 try {
-    $env:LOCALAPPDATA = $isolatedLocalAppData
-    $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-    $installProcess = Start-Process -FilePath $testInstaller -ArgumentList @("/S", "/D=$isolatedInstall") -Wait -PassThru -WindowStyle Hidden
-    if ($installProcess.ExitCode -ne 0) { throw "Isolated installer test failed with exit code $($installProcess.ExitCode)." }
-    $installedExe = Join-Path $isolatedInstall "ChatWechat.exe"
-    if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) { throw "Installed ChatWechat.exe is missing." }
-    $selfTestPath = Join-Path $stage "installed-self-test.json"
-    $selfTestExit = Invoke-WindowedProcess $installedExe @("--self-test", "--json", "--output", $selfTestPath) $isolatedLocalAppData $env:PATH
-    if ($selfTestExit -ne 0) { throw "Installed application self-test failed with exit code $selfTestExit." }
-    $installedSelfTest = Get-Content -Raw -LiteralPath $selfTestPath | ConvertFrom-Json
-    if (-not $installedSelfTest.ok -or -not $installedSelfTest.frozen) { throw "Installed application self-test did not validate frozen mode." }
-    $uninstaller = Join-Path $isolatedInstall "Uninstall.exe"
-    $uninstallProcess = Start-Process -FilePath $uninstaller -ArgumentList @("/S") -Wait -PassThru -WindowStyle Hidden
-    if ($uninstallProcess.ExitCode -ne 0) { throw "Isolated uninstall test failed with exit code $($uninstallProcess.ExitCode)." }
-    if (Test-Path -LiteralPath $isolatedInstall) { throw "Isolated uninstall left the program directory behind." }
+    corepack pnpm@10.34.5 desktop:build
+    Assert-ExitCode "Tauri NSIS build"
 }
-finally {
-    $env:LOCALAPPDATA = $savedLocalAppData
-    $env:PATH = $savedPath
+finally { Pop-Location }
+
+$bundleRoot = Join-Path $root "frontend\src-tauri\target\release\bundle\nsis"
+$builtInstaller = Get-ChildItem -LiteralPath $bundleRoot -Filter "*setup.exe" -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+if (-not $builtInstaller) { throw "Tauri did not produce an NSIS installer." }
+$installer = Join-Path $stage "ChatWechat-Setup.exe"
+Copy-Item -LiteralPath $builtInstaller.FullName -Destination $installer
+$version = (Get-Content -Raw -LiteralPath (Join-Path $root "pyproject.toml") | python -c "import sys,tomllib; print(tomllib.loads(sys.stdin.read())['project']['version'])").Trim()
+
+$isolatedInstall = Join-Path $stage "isolated-install"
+$installProcess = Start-Process -FilePath $installer -ArgumentList @("/S", "/D=$isolatedInstall") -Wait -PassThru -WindowStyle Hidden
+if ($installProcess.ExitCode -ne 0) { throw "Tauri installer test failed with exit code $($installProcess.ExitCode)." }
+$installedApp = Join-Path $isolatedInstall "ChatWechat.exe"
+$installedBackend = Join-Path $isolatedInstall "chatwechat-backend.exe"
+if (-not (Test-Path -LiteralPath $installedApp -PathType Leaf)) { throw "Installed Tauri application is missing ChatWechat.exe." }
+if (-not (Test-Path -LiteralPath $installedBackend -PathType Leaf)) { throw "Installed Tauri application is missing its backend sidecar." }
+$installedSelfTestPath = Join-Path $stage "installed-backend-self-test.json"
+$installedSelfTestExit = Invoke-BackendSelfTest $installedBackend $installedSelfTestPath $isolatedLocalAppData $isolatedInstall
+if ($installedSelfTestExit -ne 0) { throw "Installed backend self-test failed with exit code $installedSelfTestExit." }
+$installedSelfTest = Get-Content -Raw -LiteralPath $installedSelfTestPath | ConvertFrom-Json
+if (-not $installedSelfTest.ok -or -not $installedSelfTest.runtime_tools.node.bundled -or -not $installedSelfTest.runtime_tools.ffmpeg.bundled) {
+    throw "Installed backend did not use the bundled runtime tools."
 }
+$uninstaller = Join-Path $isolatedInstall "uninstall.exe"
+if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) { throw "Tauri uninstaller is missing." }
+$uninstallProcess = Start-Process -FilePath $uninstaller -ArgumentList @("/S") -Wait -PassThru -WindowStyle Hidden
+if ($uninstallProcess.ExitCode -ne 0 -or (Test-Path -LiteralPath $installedApp)) { throw "Tauri uninstall verification failed." }
 
 $result = [ordered]@{
     version = $version
     staging_root = $stage
-    application_root = $stagingRoot
     installer = $installer
-    test_installer = $testInstaller
-    nsis_compiler = $compiler
-    self_test = [string]$buildResult.self_test
-    installer_self_test = (Join-Path $stage "installed-self-test.json")
+    test_installer = $installer
+    sidecar = $sidecar
+    self_test = $selfTestPath
+    installer_self_test = $installedSelfTestPath
+    bundle_root = $bundleRoot
 }
 $resultPath = Join-Path $stage "installer-result.json"
 $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $resultPath -Encoding UTF8

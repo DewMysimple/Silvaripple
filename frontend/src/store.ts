@@ -5,6 +5,7 @@ import type {
   AccountStatisticsReport,
   Bootstrap,
   Conversation,
+  DataRootCandidate,
   ExportDraft,
   HistoryEntry,
   MediaReport,
@@ -24,6 +25,7 @@ interface WorkbenchState {
   sidebarCollapsed: boolean;
   settings?: Settings;
   accounts: Account[];
+  dataRoots: DataRootCandidate[];
   account?: Account;
   conversations: Conversation[];
   totalConversations: number;
@@ -45,6 +47,9 @@ interface WorkbenchState {
   clearError(): void;
   initialize(): Promise<void>;
   selectAccount(account: Account): Promise<void>;
+  refreshDataRoots(): Promise<void>;
+  selectDataRoot(path: string): Promise<void>;
+  useAutoDataRoot(): Promise<void>;
   loadConversations(options?: Record<string, unknown>): Promise<void>;
   toggleSelected(id: string): void;
   ensureSelected(id: string): void;
@@ -83,6 +88,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   sidebarCollapsed:
     localStorage.getItem("chatwechat.sidebar-collapsed") === "true",
   accounts: [],
+  dataRoots: [],
   conversations: [],
   totalConversations: 0,
   selected: [],
@@ -117,19 +123,48 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         data.accounts.find(
           (item) => item.account_id === data.selected_account_id,
         ) ?? data.accounts[0];
+      const previous = get();
+      const contextChanged =
+        previous.account?.account_id !== account?.account_id ||
+        previous.settings?.data_root !== data.settings.data_root;
+      if (contextChanged) {
+        conversationRequest += 1;
+        previewRequest += 1;
+      }
       set((state) => ({
         initialized: true,
         loading: false,
         settings: data.settings,
         accounts: data.accounts,
+        dataRoots: data.data_roots || [],
         account,
         exportDraft: state.exportDraft ?? createExportDraft(data.settings),
+        ...(contextChanged
+          ? {
+              conversations: [],
+              totalConversations: 0,
+              selected: [],
+              activeConversation: undefined,
+              preview: [],
+              previewTotal: 0,
+              previewOffset: 0,
+              operations: {},
+              history: [],
+              accountStatistics: undefined,
+              accountStatisticsOperationId: undefined,
+              exportOperationId: undefined,
+              mediaScanOperationId: undefined,
+              mediaScanConversationIds: [],
+            }
+          : {}),
       }));
       if (account?.coverage.covered) await get().loadConversations();
-      await Promise.all([
-        get().refreshHistory(),
-        get().refreshAccountStatistics(),
-      ]);
+      if (account) {
+        await Promise.all([
+          get().refreshHistory(),
+          get().refreshAccountStatistics(),
+        ]);
+      }
     } catch (error) {
       fail(set, error);
     }
@@ -141,6 +176,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       activeConversation: undefined,
       preview: [],
       selected: [],
+      history: [],
+      operations: {},
       loading: true,
       exportOperationId: undefined,
       mediaScanOperationId: undefined,
@@ -150,8 +187,40 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     });
     try {
       await invoke("save_settings", { last_account_id: account.account_id });
-      await get().loadConversations();
-      await get().refreshAccountStatistics();
+      if (account.coverage.covered) await get().loadConversations();
+      else set({ loading: false });
+      await Promise.all([
+        get().refreshHistory(),
+        get().refreshAccountStatistics(),
+      ]);
+    } catch (error) {
+      fail(set, error);
+    }
+  },
+  refreshDataRoots: async () => {
+    try {
+      const data = await invoke<{ items: DataRootCandidate[] }>(
+        "scan_data_roots",
+      );
+      set({ dataRoots: data.items });
+    } catch (error) {
+      fail(set, error);
+    }
+  },
+  selectDataRoot: async (path) => {
+    set({ loading: true, error: undefined });
+    try {
+      await invoke("set_data_root", path);
+      await get().initialize();
+    } catch (error) {
+      fail(set, error);
+    }
+  },
+  useAutoDataRoot: async () => {
+    set({ loading: true, error: undefined });
+    try {
+      await invoke("use_auto_data_root");
+      await get().initialize();
     } catch (error) {
       fail(set, error);
     }
@@ -218,6 +287,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       });
       if (
         request !== previewRequest ||
+        get().account?.account_id !== account.account_id ||
         get().activeConversation?.conversation_id !==
           conversation.conversation_id
       )
@@ -243,6 +313,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         { limit: 100, offset: previewOffset },
       );
       if (
+        get().account?.account_id !== account.account_id ||
         get().activeConversation?.conversation_id !==
         activeConversation.conversation_id
       )
@@ -256,9 +327,16 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     }
   },
   trackOperation: (operation) =>
-    set((state) => ({
-      operations: { ...state.operations, [operation.operation_id]: operation },
-    })),
+    set((state) =>
+      operation.account_id && operation.account_id !== state.account?.account_id
+        ? state
+        : {
+            operations: {
+              ...state.operations,
+              [operation.operation_id]: operation,
+            },
+          },
+    ),
   pollOperation: async <T>(operationId: string) => {
     for (;;) {
       const operation = await invoke<Operation<T>>(
@@ -293,11 +371,18 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     }
   },
   refreshHistory: async () => {
+    const account = get().account;
+    if (!account) {
+      set({ history: [] });
+      return;
+    }
     try {
       const data = await invoke<{ items: HistoryEntry[] }>(
         "list_operation_history",
+        account.account_id,
       );
-      set({ history: data.items });
+      if (get().account?.account_id === account.account_id)
+        set({ history: data.items });
     } catch {
       /* optional */
     }
@@ -310,7 +395,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         "get_account_statistics",
         account.account_id,
       );
-      set({ accountStatistics: data.report });
+      if (get().account?.account_id === account.account_id)
+        set({ accountStatistics: data.report });
     } catch {
       /* optional */
     }
@@ -328,7 +414,11 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       const done = await get().pollOperation<AccountStatisticsReport>(
         first.operation_id,
       );
-      if (done.status === "completed" && done.result)
+      if (
+        done.status === "completed" &&
+        done.result &&
+        get().account?.account_id === account.account_id
+      )
         set({ accountStatistics: done.result });
       await get().refreshHistory();
       return done;

@@ -9,13 +9,14 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 
 
-def test_pyinstaller_spec_is_internal_windowed_staging():
+def test_pyinstaller_spec_builds_console_sidecar_without_webview():
     source = (ROOT / "packaging" / "ChatWechat.spec").read_text(encoding="utf-8")
 
     assert "SPECPATH" in source
-    assert "console=False" in source
-    assert "ChatWechat.ico" in source
+    assert "console=True" in source
+    assert "chatwechat-backend" in source
     assert "chatwechat" in source and "frozen_entry.py" in source
+    assert 'excludes=["webview"]' in source
     assert "启动ChatWechat.pyw" not in source
     assert "runtime.lock.json" not in source
     assert not re.search(r"[A-Za-z]:[/\\]Users[/\\]", source)
@@ -35,28 +36,28 @@ def test_runtime_lock_has_versioned_sha256_files():
             assert re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
 
 
-def test_installer_lock_and_nsis_script_are_pinned():
-    lock = json.loads((ROOT / "packaging" / "installer.lock.json").read_text(encoding="utf-8"))
-    script = (ROOT / "packaging" / "ChatWechat.nsi").read_text(encoding="utf-8")
+def test_tauri_bundle_uses_current_user_nsis_and_external_backend():
+    config = json.loads((ROOT / "frontend" / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8"))
+    bundle = json.loads((ROOT / "frontend" / "src-tauri" / "tauri.bundle.conf.json").read_text(encoding="utf-8"))
+    rust_host = (ROOT / "frontend" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
 
-    assert lock["schema_version"] == 1
-    assert lock["nsis"]["version"] == "3.11"
-    assert lock["nsis"]["source"].startswith("https://")
-    assert re.fullmatch(r"[0-9a-f]{64}", lock["nsis"]["sha256"])
-    assert "RequestExecutionLevel user" in script
-    assert "ICON_FILE" in script
-    assert "InstallDir \"$LOCALAPPDATA\\Programs\\ChatWechat\"" in script
-    assert "ChatWechat-portable-backup-" in script
-    assert "SKIP_LEGACY_MIGRATION" in script
+    assert config["bundle"]["targets"] == ["nsis"]
+    assert config["bundle"]["windows"]["nsis"]["installMode"] == "currentUser"
+    assert bundle["bundle"]["externalBin"] == ["binaries/chatwechat-backend"]
+    assert bundle["bundle"]["resources"]["resources/runtime/"] == "runtime/"
+    assert config["mainBinaryName"] == "ChatWechat"
+    assert "let working_directory = resource_dir.clone()" in rust_host
+    assert ".current_dir(working_directory)" in rust_host
 
 
-def test_installer_build_uses_staging_and_isolated_install_test():
+def test_installer_build_uses_tauri_and_verified_sidecar():
     source = (ROOT / "scripts" / "Build-Installer.ps1").read_text(encoding="utf-8")
 
-    assert "Build-AppStaging.ps1" in source
-    assert "Invoke-Nsis" in source
-    assert "isolated-install" in source
-    assert "Uninstall.exe" in source
+    assert "Build-TauriSidecar.ps1" in source
+    assert "desktop:build" in source
+    assert "backend-self-test.json" in source
+    assert "isolated-install" in source and "installed-backend-self-test.json" in source
+    assert "CHATWECHAT_RESOURCE_DIR" in source
 
 
 def test_release_workflow_is_tag_only_and_version_source_is_unique():
@@ -82,6 +83,7 @@ def test_local_publish_uses_in_repo_atomic_targets_without_source_archive():
     assert "GetFolderPath(\"Desktop\")" not in source
     assert "Replace-FileAtomically" in source
     assert "test_installer" in source
+    assert "chatwechat-backend.exe" in source
     assert "status --porcelain" in source
     assert 'Join-Path $legacyBuildRoot "portable"' in source
     assert "ChatWechat-Setup.exe" in source
@@ -89,6 +91,14 @@ def test_local_publish_uses_in_repo_atomic_targets_without_source_archive():
     assert "ChatWechat-source.zip" in source
     assert "Source archive" not in source
     assert "source_zip" not in source
+
+
+def test_quality_gate_checks_python_react_and_tauri():
+    source = (ROOT / "scripts" / "Invoke-QualityGate.ps1").read_text(encoding="utf-8")
+
+    assert "python -m pytest" in source
+    assert "pnpm@10.34.5 --dir frontend test" in source
+    assert "cargo test --manifest-path frontend/src-tauri/Cargo.toml" in source
 
 
 def test_source_tree_has_no_root_pyw_launcher():

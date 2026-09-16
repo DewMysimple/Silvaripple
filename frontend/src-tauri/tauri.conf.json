@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChatWechat",
+  "mainBinaryName": "ChatWechat",
+  "version": "0.2.0",
+  "identifier": "com.chatwechat.desktop",
+  "build": {
+    "beforeDevCommand": "corepack pnpm@10.34.5 dev",
+    "devUrl": "http://127.0.0.1:4174",
+    "beforeBuildCommand": "corepack pnpm@10.34.5 build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "ChatWechat 本地微信导出",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1080,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data: blob:; media-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../../packaging/ChatWechat.ico"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

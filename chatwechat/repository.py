@@ -85,7 +85,7 @@ class WechatRepository:
             self.decrypted.clear()
 
     def _decrypt(self, source: Path) -> Path:
-        # pywebview calls and export workers can overlap. Serializing snapshot
+        # Tauri RPC calls and export workers can overlap. Serializing snapshot
         # creation prevents two readers from overwriting or deleting the same
         # temporary database on Windows (WinError 32).
         with self._decrypt_lock:

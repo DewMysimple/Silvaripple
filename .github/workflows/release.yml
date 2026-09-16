@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: "24.16.0"
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Verify release tag and install build dependencies
         shell: pwsh
         run: |

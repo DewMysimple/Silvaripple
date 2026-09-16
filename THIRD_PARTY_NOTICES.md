@@ -21,13 +21,14 @@ The offline web user interface bundles the following open-source packages:
 - Zustand 5.0.14 — Paul Henschel and contributors (MIT License)
 - Motion 12.42.2 — Framer B.V. (MIT License)
 - Lucide React 1.24.0 — Lucide contributors (ISC License)
+- Tauri 2.11 and official Dialog plugin 2.7 — Tauri Programme within The Commons Conservancy (Apache-2.0 / MIT)
 
-These packages run only inside the local pywebview window. The production UI does
+These packages run only inside the local Tauri WebView2 window. The production UI does
 not load fonts, scripts, styles, analytics, or other assets from the network.
 
-## Portable runtime tools
+## Bundled runtime tools
 
-The Windows portable distribution includes the following command-line runtimes.
+The Windows installer includes the following command-line runtimes.
 They are copied only into build artifacts and are not committed to this repository.
 
 - Node.js 24.16.0 — Node.js contributors (MIT License and bundled third-party
@@ -36,6 +37,6 @@ They are copied only into build artifacts and are not committed to this reposito
   contributors (GNU General Public License, version 3). Source project:
   https://ffmpeg.org/ and build provenance: https://github.com/BtbN/FFmpeg-Builds
 
-The portable folder contains this notice, the FFmpeg distribution license, and
+The installed application contains this notice, the FFmpeg distribution license, and
 the already vendored `silk-wasm` license. Runtime files are accepted by the build
 only when their SHA-256 values match `packaging/runtime.lock.json`.

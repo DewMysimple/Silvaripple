@@ -1,4 +1,4 @@
-"""Desktop shell and pywebview adapter layer."""
+"""Desktop RPC adapter shared by the Tauri shell and backend tests."""
 
 from .bridge import Bridge
 

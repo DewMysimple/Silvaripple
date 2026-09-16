@@ -6,6 +6,7 @@ import {
   Clock3,
   Database,
   Download,
+  FolderSearch,
   HardDrive,
   MessageCircle,
   RefreshCw,
@@ -28,6 +29,9 @@ export function HomeView() {
     mediaScanOperationId,
     accountStatistics,
     accountStatisticsOperationId,
+    dataRoots,
+    refreshDataRoots,
+    selectDataRoot,
     startAccountStatisticsScan,
     setView,
   } = useWorkbench();
@@ -68,8 +72,45 @@ export function HomeView() {
           : b.message_count - a.message_count,
     );
   }, [accountStatistics, statisticsQuery, statisticsSort]);
+  const chooseDataRoot = async () => {
+    const result = await invoke<{ path?: string }>("choose_folder");
+    if (result.path) await selectDataRoot(result.path);
+  };
   return (
     <div className="page home-page">
+      {!account && (
+        <section className="setup-guide">
+          <div className="setup-guide-copy">
+            <span className="setup-guide-icon"><FolderSearch size={24} /></span>
+            <div>
+              <span className="eyebrow green">首次连接</span>
+              <h2>找到这台电脑上的微信数据</h2>
+              <p>ChatWechat 会检查系统“文档”、OneDrive 文档和各磁盘的标准微信目录；也可以手动选择 xwechat_files、WeChat Files 或单个 wxid_ 账号目录。</p>
+            </div>
+          </div>
+          <div className="setup-steps">
+            <span className="current"><b>1</b>定位数据</span>
+            <span><b>2</b>选择账号</span>
+            <span><b>3</b>授权读取</span>
+          </div>
+          {dataRoots.length > 0 ? (
+            <div className="setup-candidates">
+              {dataRoots.slice(0, 3).map((candidate) => (
+                <button key={candidate.path} onClick={() => void selectDataRoot(candidate.path)}>
+                  <span><strong>{candidate.account_count} 个微信账号</strong><small>{candidate.path}</small></span>
+                  <ArrowRight size={17} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="setup-empty">标准位置中还没有发现可读取的数据。微信的数据位置可能已被迁移。</p>
+          )}
+          <div className="setup-actions">
+            <button className="primary" onClick={() => void refreshDataRoots()}><RefreshCw size={16} />重新自动检测</button>
+            <button className="secondary" onClick={() => void chooseDataRoot()}><FolderSearch size={16} />手动选择目录</button>
+          </div>
+        </section>
+      )}
       <section className={`account-overview ${account ? "" : "is-empty"}`}>
         <div className="account-identity">
           <div className="home-account-avatar">

@@ -11,6 +11,7 @@ def test_old_settings_and_presets_migrate_media_defaults_on(tmp_path):
     assert settings.download_missing_media_default is True
     assert settings.allow_legacy_http_media_default is True
     assert settings.open_result_folder_after_export is False
+    assert settings.data_root_mode == "auto"
     assert settings.export_folder_layout == "by_type"
     assert (settings.visual_download_limit_mib, settings.audio_download_limit_mib, settings.large_download_limit_mib) == (50, 100, 500)
 
@@ -98,7 +99,8 @@ def test_bridge_contract_and_ui_assets():
     from chatwechat.service import Bridge
 
     expected = {
-        "bootstrap", "scan_accounts", "authorize_account", "list_conversations", "preview_messages",
+        "bootstrap", "scan_accounts", "scan_data_roots", "set_data_root", "use_auto_data_root",
+        "authorize_account", "list_conversations", "preview_messages",
         "estimate_export", "start_export", "cancel_operation", "get_operation", "choose_folder", "save_settings",
         "search_messages", "start_media_scan", "get_media_report", "list_operation_history",
         "clear_operation_history", "clear_abnormal_operation_history", "list_export_presets", "save_export_preset", "delete_export_preset",
@@ -107,17 +109,17 @@ def test_bridge_contract_and_ui_assets():
         "relink_operation_history_entry", "trash_export_result",
     }
     assert expected <= set(dir(Bridge))
-    root = Path(__file__).parents[1] / "chatwechat" / "web"
-    html = (root / "index.html").read_text(encoding="utf-8")
-    assets = list((root / "assets").glob("index-*.js"))
-    assert assets
-    javascript = assets[0].read_text(encoding="utf-8")
     frontend = Path(__file__).parents[1] / "frontend" / "src"
+    html = (frontend.parent / "index.html").read_text(encoding="utf-8")
+    bridge_source = (frontend / "bridge.ts").read_text(encoding="utf-8")
+    tauri_config = (frontend.parent / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8")
     source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted(frontend.rglob("*.tsx"))
     )
-    assert "pywebview" in javascript
+    assert "invokeTauri" in bridge_source and "@tauri-apps/api/core" in bridge_source
+    assert "pywebview" not in bridge_source
+    assert "ChatWechat 本地微信导出" in tauri_config
     assert "开始导出" in source and "允许数据库覆盖不完整" in source
     assert "allow_legacy_http_media" in source
     assert "download_missing_media_default" in source
@@ -139,6 +141,7 @@ def test_bridge_contract_and_ui_assets():
     assert "last_account_id" in store_source
     assert "正在刷新本地媒体状态" in source
     assert "account.avatar_data_url" in source
+    assert "account-switcher" in source and "检测到的微信数据" in source
     assert "浏览并选择聊天" in source and "整理导出范围" in source and "检查媒体可用性" in source
     assert "workbench-launches" in source and "account-overview" in source
     assert "clear_abnormal_operation_history" in source
@@ -216,6 +219,22 @@ def test_history_cleanup_preserves_running_and_only_removes_true_abnormal(tmp_pa
     assert result["deleted_count"] == 4
     assert result["preserved_running_count"] == 1
     assert service.history_store.load() == [rows[0]]
+
+
+def test_history_is_scoped_to_current_account(tmp_path):
+    from chatwechat.service import ChatWechatService, JsonListStore
+
+    service = object.__new__(ChatWechatService)
+    service.history_store = JsonListStore(tmp_path / "history.json")
+    service.history_store.save([
+        {"history_id": "a", "account_id": "account-a", "kind": "media_scan", "status": "completed", "directory_health": "not_applicable"},
+        {"history_id": "b", "account_id": "account-b", "kind": "media_scan", "status": "completed", "directory_health": "not_applicable"},
+    ])
+
+    assert [row["history_id"] for row in service.list_operation_history("account-a")["items"]] == ["a"]
+    result = service.clear_operation_history("account-a")
+    assert result["deleted_count"] == 1
+    assert [row["history_id"] for row in service.history_store.load()] == ["b"]
 
 
 def test_shared_history_detects_superseded_export_and_will_not_trash_current(tmp_path, monkeypatch):

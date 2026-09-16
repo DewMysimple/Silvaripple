@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/chatwechat-backend"],
+    "resources": {
+      "resources/runtime/": "runtime/",
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    }
+  }
+}

@@ -23,11 +23,20 @@ export interface Account {
   database_count: number;
   coverage: Coverage;
   directory: string;
+  last_database_write?: string;
   avatar_data_url?: string;
+}
+export interface DataRootCandidate {
+  path: string;
+  source: "saved" | "registry" | "documents" | "profile" | "onedrive" | "appdata" | "drive" | string;
+  account_count: number;
+  latest_database_write?: string;
+  selected: boolean;
 }
 export type ExportFolderLayout = "flat" | "by_type" | "account_by_type";
 export interface Settings {
   data_root: string;
+  data_root_mode: "auto" | "manual";
   output_directory: string;
   theme: Theme;
   conversation_kind: string;
@@ -89,6 +98,7 @@ export interface OperationProgressDetail {
 export interface Operation<T = unknown> {
   operation_id: string;
   kind: string;
+  account_id?: string;
   status: string;
   progress: number;
   message: string;
@@ -113,6 +123,7 @@ export interface ConversationArchive {
 }
 export interface HistoryEntry {
   history_id: string;
+  account_id?: string;
   kind: string;
   status: string;
   created_at: string;
@@ -270,5 +281,6 @@ export interface Bootstrap {
   settings: Settings;
   accounts: Account[];
   selected_account_id?: string;
+  data_roots: DataRootCandidate[];
   capabilities: Record<string, boolean>;
 }

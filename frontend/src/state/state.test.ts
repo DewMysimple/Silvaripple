@@ -5,6 +5,7 @@ import { ensureId, mergeIds, toggleId } from "./selection";
 
 const settings: Settings = {
   data_root: "data",
+  data_root_mode: "auto",
   output_directory: "output",
   theme: "system",
   conversation_kind: "all",
