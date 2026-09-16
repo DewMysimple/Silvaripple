@@ -78,8 +78,8 @@ def test_release_workflow_is_tag_only_and_version_source_is_unique():
 def test_local_publish_uses_in_repo_atomic_targets_without_source_archive():
     source = (ROOT / "scripts" / "Publish-Local.ps1").read_text(encoding="utf-8")
 
-    assert "artifacts\\发布版本" in source
-    assert "artifacts\\安装版\\ChatWechat" in source
+    assert "releaseDirectoryName" in source and "0x53D1" in source
+    assert "installedDirectoryName" in source and "0x5B89" in source
     assert "GetFolderPath(\"Desktop\")" not in source
     assert "Replace-FileAtomically" in source
     assert "test_installer" in source
@@ -91,6 +91,12 @@ def test_local_publish_uses_in_repo_atomic_targets_without_source_archive():
     assert "ChatWechat-source.zip" in source
     assert "Source archive" not in source
     assert "source_zip" not in source
+
+
+def test_powershell_release_scripts_are_windows_powershell_safe_ascii():
+    for name in ("Build-Installer.ps1", "Build-TauriSidecar.ps1", "Invoke-QualityGate.ps1", "Publish-Local.ps1"):
+        source = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+        assert source.isascii(), f"{name} must remain ASCII for Windows PowerShell 5"
 
 
 def test_quality_gate_checks_python_react_and_tauri():

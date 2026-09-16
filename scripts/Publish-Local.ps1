@@ -66,12 +66,14 @@ function Invoke-WindowedSelfTest([string]$Executable, [string]$OutputPath, [stri
 
 if (-not $RepositoryRoot) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 $root = [IO.Path]::GetFullPath($RepositoryRoot)
-$artifactRoot = Join-Path $root "artifacts\发布版本"
-if (-not $InstalledRoot) { $InstalledRoot = Join-Path $root "artifacts\安装版\ChatWechat" }
+$releaseDirectoryName = -join ([char[]](0x53D1, 0x5E03, 0x7248, 0x672C))
+$installedDirectoryName = -join ([char[]](0x5B89, 0x88C5, 0x7248))
+$artifactRoot = Join-Path (Join-Path $root "artifacts") $releaseDirectoryName
+if (-not $InstalledRoot) { $InstalledRoot = Join-Path (Join-Path (Join-Path $root "artifacts") $installedDirectoryName) "ChatWechat" }
 if (-not $InstallerOutput) { $InstallerOutput = Join-Path $artifactRoot "ChatWechat-Setup.exe" }
 $InstallerOutput = [IO.Path]::GetFullPath($InstallerOutput)
 $InstalledRoot = [IO.Path]::GetFullPath($InstalledRoot)
-$installArtifactRoot = [IO.Path]::GetFullPath((Join-Path $root "artifacts\安装版"))
+$installArtifactRoot = [IO.Path]::GetFullPath((Join-Path (Join-Path $root "artifacts") $installedDirectoryName))
 Assert-ChildPath $root $artifactRoot
 Assert-ChildPath $artifactRoot $InstallerOutput
 Assert-ChildPath $installArtifactRoot $InstalledRoot
@@ -111,19 +113,19 @@ try {
     try {
         if (Test-Path -LiteralPath $InstalledRoot) { Move-Item -LiteralPath $InstalledRoot -Destination $installBackup; $installBackedUp = $true }
         $installProcess = Start-Process -FilePath $localTestInstaller -ArgumentList @("/S", "/D=$InstalledRoot") -Wait -PassThru -WindowStyle Hidden
-        if ($installProcess.ExitCode -ne 0) { throw "工程内安装失败，退出码 $($installProcess.ExitCode)。" }
+        if ($installProcess.ExitCode -ne 0) { throw "In-repository installation failed with exit code $($installProcess.ExitCode)." }
         $installedExecutable = Join-Path $InstalledRoot "ChatWechat.exe"
-        if (-not (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) { throw "工程内安装缺少 ChatWechat.exe。" }
+        if (-not (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) { throw "The installed application is missing ChatWechat.exe." }
         $installedBackend = Get-ChildItem -LiteralPath $InstalledRoot -Filter "chatwechat-backend.exe" -File -Recurse | Select-Object -First 1
-        if (-not $installedBackend) { throw "工程内安装缺少 Python 后端 sidecar。" }
+        if (-not $installedBackend) { throw "The installed application is missing its Python backend sidecar." }
         $installedNode = Get-ChildItem -LiteralPath $InstalledRoot -Filter "node.exe" -File -Recurse | Where-Object { $_.FullName -like "*runtime*node*" } | Select-Object -First 1
-        if (-not $installedNode) { throw "工程内安装缺少 Node 运行时。" }
+        if (-not $installedNode) { throw "The installed application is missing its Node runtime." }
         $resourceRoot = $installedNode.Directory.Parent.Parent.FullName
         $installedSelfTest = Join-Path $stage "project-installed-self-test.json"
         $selfTestExit = Invoke-WindowedSelfTest $installedBackend.FullName $installedSelfTest $resourceRoot
-        if ($selfTestExit -ne 0) { throw "工程内安装版自检失败，退出码 $selfTestExit。" }
+        if ($selfTestExit -ne 0) { throw "The installed application self-test failed with exit code $selfTestExit." }
         $selfTest = Get-Content -Raw -LiteralPath $installedSelfTest | ConvertFrom-Json
-        if (-not $selfTest.ok -or -not $selfTest.frozen) { throw "工程内安装版未通过冻结模式自检。" }
+        if (-not $selfTest.ok -or -not $selfTest.frozen) { throw "The installed application did not pass frozen-mode self-test." }
         if ($installBackedUp -and (Test-Path -LiteralPath $installBackup)) { Remove-Item -LiteralPath $installBackup -Recurse -Force }
     }
     catch {
