@@ -1,7 +1,6 @@
 import {
   ChevronLeft,
   Download,
-  HardDrive,
   Home,
   Image,
   ListChecks,
@@ -38,8 +37,15 @@ const pageCopy: Record<ViewId, [string, string]> = {
 };
 
 export function Sidebar() {
-  const { view, setView, sidebarCollapsed, toggleSidebar, account, operations } =
-    useWorkbench();
+  const {
+    view,
+    setView,
+    sidebarCollapsed,
+    toggleSidebar,
+    account,
+    operations,
+    selected,
+  } = useWorkbench();
   const running = Object.values(operations).filter((item) =>
     ["pending", "running"].includes(item.status),
   ).length;
@@ -49,7 +55,7 @@ export function Sidebar() {
         <BrandMark />
         <div className="brand-copy">
           <strong>ChatWechat</strong>
-          <span>LOCAL ARCHIVE DESK</span>
+          <span>微信本地归档</span>
         </div>
         <button
           className="icon-button sidebar-toggle"
@@ -67,10 +73,13 @@ export function Sidebar() {
             className={`nav-item ${view === id ? "is-active" : ""}`}
             onClick={() => setView(id)}
             aria-current={view === id ? "page" : undefined}
+            title={sidebarCollapsed ? label : undefined}
+            aria-label={label}
           >
             <Icon size={18} />
             <span>{label}</span>
             {id === "tasks" && running > 0 && <b>{running}</b>}
+            {id === "export" && selected.length > 0 && <b>{selected.length}</b>}
           </button>
         ))}
       </nav>
@@ -78,7 +87,9 @@ export function Sidebar() {
       <section className="account-status">
         <div className="status-line">
           <i className={account?.coverage.complete ? "ok" : ""} />
-          <span>{account?.coverage.complete ? "本地数据库就绪" : "等待账号授权"}</span>
+          <span>
+            {account?.coverage.complete ? "本地数据库就绪" : "等待账号授权"}
+          </span>
         </div>
         <strong>{account?.display_name || "尚未选择账号"}</strong>
         <span>
@@ -88,14 +99,15 @@ export function Sidebar() {
         </span>
       </section>
       <p className="build-label">
-        TAURI DESKTOP · {isMockBridge() ? "MOCK" : "OFFLINE"}
+        {isMockBridge() ? "界面演示 · 示例数据" : "本地处理 · 只读访问"}
       </p>
     </aside>
   );
 }
 
 export function Topbar() {
-  const { view, settings, setView, accounts, account, selectAccount } = useWorkbench();
+  const { view, settings, setView, accounts, account, selectAccount } =
+    useWorkbench();
   const [title, subtitle] = pageCopy[view];
   const ThemeIcon =
     settings?.theme === "dark"
@@ -106,8 +118,8 @@ export function Topbar() {
   return (
     <header className="topbar">
       <div>
-        <span className="eyebrow">{subtitle}</span>
         <h1>{title}</h1>
+        <p className="topbar-subtitle">{subtitle}</p>
       </div>
       <div className="topbar-actions">
         {accounts.length > 0 && (
@@ -127,13 +139,16 @@ export function Topbar() {
               aria-label="切换当前微信账号"
               value={account?.account_id || ""}
               onChange={(event) => {
-                const next = accounts.find((item) => item.account_id === event.target.value);
+                const next = accounts.find(
+                  (item) => item.account_id === event.target.value,
+                );
                 if (next) void selectAccount(next);
               }}
             >
               {accounts.map((item) => (
                 <option value={item.account_id} key={item.account_id}>
-                  {item.display_name}{item.coverage.complete ? " · 已就绪" : " · 待授权"}
+                  {item.display_name}
+                  {item.coverage.complete ? " · 已就绪" : " · 待授权"}
                 </option>
               ))}
             </select>
@@ -143,10 +158,18 @@ export function Topbar() {
           <ShieldCheck size={15} />
           只读快照
         </span>
-        <button className="icon-button" onClick={() => setView("search")} aria-label="打开全局搜索">
+        <button
+          className="icon-button"
+          onClick={() => setView("search")}
+          aria-label="打开全局搜索"
+        >
           <Search size={18} />
         </button>
-        <button className="icon-button" onClick={() => setView("settings")} aria-label="打开显示设置">
+        <button
+          className="icon-button"
+          onClick={() => setView("settings")}
+          aria-label="打开显示设置"
+        >
           <ThemeIcon size={18} />
         </button>
       </div>

@@ -4,16 +4,26 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex,
+    },
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tauri::{Manager, RunEvent, State};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+mod windows_job;
+#[cfg(windows)]
+use windows_job::{resume_suspended_child, WindowsJob};
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+#[cfg(all(test, windows))]
+mod lifecycle_tests;
 
 struct BackendProcess {
     child: Child,
@@ -23,7 +33,12 @@ struct BackendProcess {
 }
 
 impl BackendProcess {
-    fn start(working_directory: &Path, resource_dir: &Path) -> Result<Self, String> {
+    fn start(
+        working_directory: &Path,
+        resource_dir: &Path,
+        #[cfg(windows)] job: &WindowsJob,
+        closing: &AtomicBool,
+    ) -> Result<Self, String> {
         let mut command = if let Ok(executable) = env::var("CHATWECHAT_BACKEND") {
             Command::new(executable)
         } else if cfg!(debug_assertions) {
@@ -35,7 +50,7 @@ impl BackendProcess {
             let current = env::current_exe().map_err(|error| error.to_string())?;
             let directory = current
                 .parent()
-                .ok_or_else(|| "无法定位 ChatWechat 安装目录".to_owned())?;
+                .ok_or_else(|| "无法定位 ChatWechat 应用目录".to_owned())?;
             let candidates = [
                 directory.join("chatwechat-backend.exe"),
                 directory.join("binaries").join("chatwechat-backend.exe"),
@@ -44,14 +59,28 @@ impl BackendProcess {
             let executable = candidates
                 .into_iter()
                 .find(|path| path.is_file())
-                .ok_or_else(|| "ChatWechat 后端组件缺失，请重新安装。".to_owned())?;
+                .ok_or_else(|| "ChatWechat 后端组件缺失，请重新完整解压应用。".to_owned())?;
             Command::new(executable)
         };
 
         command
             .arg("--rpc")
             .current_dir(working_directory)
-            .env("CHATWECHAT_RESOURCE_DIR", resource_dir)
+            .env("CHATWECHAT_RESOURCE_DIR", resource_dir);
+        Self::spawn(
+            command,
+            #[cfg(windows)]
+            job,
+            closing,
+        )
+    }
+
+    fn spawn(
+        mut command: Command,
+        #[cfg(windows)] job: &WindowsJob,
+        closing: &AtomicBool,
+    ) -> Result<Self, String> {
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(if cfg!(debug_assertions) {
@@ -60,11 +89,35 @@ impl BackendProcess {
                 Stdio::null()
             });
         #[cfg(windows)]
-        command.creation_flags(CREATE_NO_WINDOW);
+        command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
 
         let mut child = command
             .spawn()
             .map_err(|error| format!("无法启动 ChatWechat 后端：{error}"))?;
+        #[cfg(windows)]
+        let prepare = job.attach(&child).and_then(|_| {
+            if closing.load(Ordering::SeqCst) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "Application is closing",
+                ));
+            }
+            resume_suspended_child(&child)
+        });
+        #[cfg(not(windows))]
+        let prepare: std::io::Result<()> = if closing.load(Ordering::SeqCst) {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Application is closing",
+            ))
+        } else {
+            Ok(())
+        };
+        if let Err(error) = prepare {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("无法管理 ChatWechat 后端进程：{error}"));
+        }
         let input = child
             .stdin
             .take()
@@ -112,16 +165,8 @@ impl BackendProcess {
             .ok_or_else(|| "ChatWechat 后端响应缺少结果".to_owned())
     }
 
-    fn stop(&mut self) {
+    fn stop_gracefully(&mut self) {
         let _ = self.call("shutdown", Vec::new());
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while Instant::now() < deadline {
-            if self.child.try_wait().ok().flatten().is_some() {
-                return;
-            }
-            thread::sleep(Duration::from_millis(25));
-        }
-        let _ = self.child.kill();
         let _ = self.child.wait();
     }
 }
@@ -129,17 +174,25 @@ impl BackendProcess {
 #[derive(Clone)]
 struct BackendManager {
     process: Arc<Mutex<Option<BackendProcess>>>,
+    closing: Arc<AtomicBool>,
+    #[cfg(windows)]
+    job: Arc<WindowsJob>,
     working_directory: PathBuf,
     resource_dir: PathBuf,
 }
 
 impl BackendManager {
-    fn new(working_directory: PathBuf, resource_dir: PathBuf) -> Self {
-        Self {
+    fn new(working_directory: PathBuf, resource_dir: PathBuf) -> Result<Self, String> {
+        Ok(Self {
             process: Arc::new(Mutex::new(None)),
+            closing: Arc::new(AtomicBool::new(false)),
+            #[cfg(windows)]
+            job: Arc::new(
+                WindowsJob::new().map_err(|error| format!("无法创建后端进程管理器：{error}"))?,
+            ),
             working_directory,
             resource_dir,
-        }
+        })
     }
 
     fn call(&self, method: &str, args: Vec<Value>) -> Result<Value, String> {
@@ -147,10 +200,16 @@ impl BackendManager {
             .process
             .lock()
             .map_err(|_| "ChatWechat 后端状态不可用".to_owned())?;
+        if self.closing.load(Ordering::SeqCst) {
+            return Err("ChatWechat 正在关闭".to_owned());
+        }
         if guard.is_none() {
             *guard = Some(BackendProcess::start(
                 &self.working_directory,
                 &self.resource_dir,
+                #[cfg(windows)]
+                &self.job,
+                &self.closing,
             )?);
         }
         let result = guard
@@ -158,8 +217,11 @@ impl BackendManager {
             .ok_or_else(|| "ChatWechat 后端尚未启动".to_owned())?
             .call(method, args);
         if result.is_err() {
+            #[cfg(windows)]
+            self.job.terminate();
             if let Some(process) = guard.as_mut() {
                 let _ = process.child.kill();
+                let _ = process.child.wait();
             }
             *guard = None;
         }
@@ -167,11 +229,39 @@ impl BackendManager {
     }
 
     fn stop(&self) {
-        if let Ok(mut guard) = self.process.lock() {
-            if let Some(process) = guard.as_mut() {
-                process.stop();
+        self.stop_with_timeout(Duration::from_secs(2));
+    }
+
+    fn stop_with_timeout(&self, grace: Duration) {
+        if self.closing.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let process = self.process.clone();
+        let (done, receiver) = mpsc::channel();
+        // Both the mutex and the shutdown RPC can block. Keep them off the
+        // window thread; only this bounded channel wait is on the exit path.
+        thread::spawn(move || {
+            if let Ok(mut guard) = process.lock() {
+                if let Some(process) = guard.as_mut() {
+                    process.stop_gracefully();
+                }
+                *guard = None;
             }
-            *guard = None;
+            let _ = done.send(());
+        });
+        let exited = receiver.recv_timeout(grace).is_ok();
+        #[cfg(windows)]
+        self.job.terminate();
+        #[cfg(not(windows))]
+        if let Ok(mut guard) = self.process.try_lock() {
+            if let Some(process) = guard.as_mut() {
+                let _ = process.child.kill();
+            }
+        }
+        if !exited {
+            // Killing the process tree closes inherited stdout handles too,
+            // releasing blocked RPC readers and allowing the child to be reaped.
+            let _ = receiver.recv_timeout(Duration::from_secs(1));
         }
     }
 }
@@ -207,7 +297,7 @@ pub fn run() {
             let working_directory = repository_root.clone();
             #[cfg(not(debug_assertions))]
             let working_directory = resource_dir.clone();
-            app.manage(BackendManager::new(working_directory, resource_dir));
+            app.manage(BackendManager::new(working_directory, resource_dir)?);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![bridge_invoke])

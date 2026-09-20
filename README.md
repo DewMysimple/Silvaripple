@@ -37,14 +37,14 @@ python -m chatwechat
 实际“文档”目录、OneDrive 重定向文档、AppData 中的兼容路径、
 `Documents/xwechat_files`、`Documents/WeChat Files/xwechat_files` 和各本地
 磁盘的标准微信目录；选择过的有效目录会作为当前用户设置保存。若微信把数据迁移到了
-其他位置，可在首次连接页或“设置 → 账号与存储”手动选择 `xwechat_files`、
+其他位置，可在首次连接页或“设置 → 账号与数据”手动选择 `xwechat_files`、
 `WeChat Files` 或单个 `wxid_*` 账号目录，应用会校验并归一化为真实数据根目录。
 
 使用顺序：
 
 1. 应用自动定位微信数据并展示候选目录；没有命中时手动选择目录。
 2. 顶部账号切换器选择当前账号；已有有效密钥时不会再次触发 UAC。
-3. 未授权账号在“设置 → 账号与存储”执行一次“授权读取”。
+3. 未授权账号在“设置 → 账号与数据”执行一次“授权读取”。
 4. 在“会话浏览”中筛选、预览并选择会话，再到“导出工作台”确认输出。
 5. 需要时在“媒体完整性”扫描当前账号，或在“全局搜索”按需搜索正文。
 
@@ -101,8 +101,10 @@ python -m pytest
 cd frontend
 corepack pnpm install
 corepack pnpm test
+corepack pnpm format:check
 corepack pnpm typecheck
 corepack pnpm build
+corepack pnpm test:e2e
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
@@ -111,55 +113,72 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 前端开发服务器使用 Mock Bridge；Tauri 开发/生产窗口调用 Rust 命令，再由同一状态化
 Python sidecar 执行结构化 Bridge。用户运行生产版本不需要安装 Python、Rust 或 Node.js；
-后端、Node 语音运行时和 FFmpeg 都随安装包提供。
+后端、Node 语音运行时和 FFmpeg 都随应用压缩包提供。
 
-## 架构与安装版
+## 架构与交付
 
 工程保持模块化桌面单体：`frontend/src-tauri` 负责窗口、权限、原生目录选择和 Python
 sidecar 生命周期，`desktop/bridge.py` 保持稳定 RPC 合约，`application` 暴露用例门面，
 `domain` 与 `infrastructure` 承载规则和平台能力，导出/媒体模块独立演进；React 前端按
-应用外壳、页面、通用 UI 和 Zustand 状态切片拆分。
+应用外壳、功能模块、通用 UI 和 Zustand 状态切片拆分：
 
-构建安装器前会用 PyInstaller 生成单文件 Python sidecar，再由 Tauri 生成当前用户 NSIS
-安装包；sidecar 和运行时 staging 都不是独立交付格式：
+```text
+frontend/src/
+  app/          # 导航外壳、主题、全局反馈
+  features/     # 首页、会话、搜索、导出、媒体、任务、设置及共享账号工作流
+  ui/           # 公共面板、状态、表单控件、确认交互
+  state/        # 账号 / 会话 / 操作切片、统一上下文重置
+  styles/       # 全局主题、字号与间距 token
+  bridge/       # RPC 信封和仅开发加载的合成数据
+  utils/        # 日期、消息类型等公共转换
+```
+
+新增页面应复用公共 UI 与上下文边界，业务行为留在对应功能模块；不向根 App 或全局样式中
+继续堆放页面实现。统一质量门同时检查行为、格式、类型、多窗口浏览器布局和桌面后端生命周期。
+
+构建时用 PyInstaller 生成单文件 Python sidecar，再由 Tauri 嵌入前端并生成桌面主程序。
+统一打包脚本组装主程序、后端、锁定运行时和许可证，生成可直接解压运行的应用：
 
 ```powershell
 python -m pip install ".[test,build]"
-powershell -ExecutionPolicy Bypass -File scripts\Build-Installer.ps1
+powershell -ExecutionPolicy Bypass -File scripts\Build-Portable.ps1
 ```
 
-构建脚本验证 React、Python、Rust/Tauri、工程记忆、锁定的 Node/FFmpeg，并执行冻结
-sidecar 的 `--self-test`。本地正式覆盖要求工作区已经提交且干净：
+构建脚本验证 React、Python、Rust/Tauri、工程记忆及锁定的 Node/FFmpeg。应用压缩后必须
+重新解压，逐文件核验构建清单，再在隔离用户配置和精简 PATH 下执行后端自检，确认只使用
+包内运行时。本地正式覆盖要求工作区已经提交且干净：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\Publish-Local.ps1
 ```
 
-成功后只保留工程内的安装包、工程内安装实例和校验文件；源码继续以 GitHub 仓库为唯一分发来源：
+成功后根目录 `dist/` 只有以下两项，解压目录来自同一个已验证的 ZIP：
 
 ```text
-artifacts/发布版本/
-  ChatWechat-Setup.exe
-  SHA256SUMS.txt
-
-artifacts/安装版/ChatWechat/
-  ChatWechat.exe
-  chatwechat-backend.exe
-  runtime/
-  uninstall.exe
-  ...
+dist/
+  ChatWechat.zip
+  ChatWechat/
+    ChatWechat.exe
+    chatwechat-backend.exe
+    runtime/
+    licenses/
+    THIRD_PARTY_NOTICES.md
+    README.txt
+    build-info.json
 ```
 
-安装程序默认写入 `%LOCALAPPDATA%\Programs\ChatWechat`，设置、DPAPI 密钥、任务历史和
-临时文件继续位于 `%LOCALAPPDATA%\ChatWechat`。安装器创建开始菜单和桌面快捷方式；升级
-时提示关闭正在运行的应用，不删除用户数据。发布脚本还会用同一 NSIS 安装器在工程内
-更新 `artifacts/安装版/ChatWechat/`，便于本机直接验证；该目录和发布包均被 Git 忽略。
-旧便携版不再作为交付物或构建输出。
+直接运行 `dist/ChatWechat/ChatWechat.exe` 验收；分发时发送 `dist/ChatWechat.zip`，完整
+解压后运行即可。用户无需安装 Python、Node.js 或 Rust，Windows 需具备 WebView2 Runtime。
+设置、DPAPI 密钥、任务历史和临时文件继续位于 `%LOCALAPPDATA%\ChatWechat`；更新时关闭
+应用并替换整个应用文件夹，不影响微信数据和既有导出文件。包内 `build-info.json` 记录
+版本、源码提交和每个应用文件的 SHA-256；ZIP 的 SHA-256 由发布命令返回。`dist/` 被 Git 忽略。
 
-失败不会替换上一版安装包或工程内安装实例。普通 `main` 推送不会创建 GitHub Release；只有明确发布
-并推送与 `pyproject.toml` 一致的 `vX.Y.Z` 标签时，标签工作流才会创建版本化安装资产。该工作流需要仓库变量
+发布将 ZIP 和解压目录作为一组替换；最终目录自检失败会恢复上一组文件。源码继续以 GitHub
+仓库为唯一分发来源。普通 `main` 推送不会创建 GitHub Release；只有明确发布并推送与
+`pyproject.toml` 一致的 `vX.Y.Z` 标签时，标签工作流才会创建版本化应用 ZIP 和校验文件。该工作流需要仓库变量
 `CHATWECHAT_FFMPEG_ARCHIVE_URL` 和 `CHATWECHAT_FFMPEG_ARCHIVE_SHA256` 指向与
-`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。普通源码发布不再生成源码 ZIP、onedir 或便携格式交付物。
+`packaging/runtime.lock.json` 完全一致的 FFmpeg 归档。构建中间文件位于系统临时目录，
+Tauri 缓存位于 `frontend/src-tauri/target/`，前端静态构建位于 `frontend/dist/`；它们都不是用户交付目录。
 
 ## 当前适配边界
 

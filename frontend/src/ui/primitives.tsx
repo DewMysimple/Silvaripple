@@ -88,7 +88,16 @@ export function Progress({ operation }: { operation: Operation }) {
         <strong>{operation.message}</strong>
         <span>{Math.round(operation.progress * 100)}%</span>
       </div>
-      <div className="progress-track">
+      <div
+        className="progress-track"
+        role="progressbar"
+        aria-label={operation.message || "任务进度"}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(
+          Math.min(1, Math.max(0, operation.progress)) * 100,
+        )}
+      >
         <i style={{ width: `${Math.max(2, operation.progress * 100)}%` }} />
       </div>
       {operation.error && <p className="error-text">{operation.error}</p>}

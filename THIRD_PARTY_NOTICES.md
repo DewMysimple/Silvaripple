@@ -28,7 +28,7 @@ not load fonts, scripts, styles, analytics, or other assets from the network.
 
 ## Bundled runtime tools
 
-The Windows installer includes the following command-line runtimes.
+The Windows application archive includes the following command-line runtimes.
 They are copied only into build artifacts and are not committed to this repository.
 
 - Node.js 24.16.0 — Node.js contributors (MIT License and bundled third-party
@@ -37,6 +37,6 @@ They are copied only into build artifacts and are not committed to this reposito
   contributors (GNU General Public License, version 3). Source project:
   https://ffmpeg.org/ and build provenance: https://github.com/BtbN/FFmpeg-Builds
 
-The installed application contains this notice, the FFmpeg distribution license, and
-the already vendored `silk-wasm` license. Runtime files are accepted by the build
+The extracted application contains this notice, the Node.js and FFmpeg distribution
+licenses, and the already vendored `silk-wasm` license. Runtime files are accepted by the build
 only when their SHA-256 values match `packaging/runtime.lock.json`.

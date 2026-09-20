@@ -30,7 +30,9 @@ describe("export draft helpers", () => {
   });
 
   it("updates a draft without dropping unrelated choices", () => {
-    const draft = mergeExportDraft(createExportDraft(settings), { visualLimit: 80 });
+    const draft = mergeExportDraft(createExportDraft(settings), {
+      visualLimit: 80,
+    });
     expect(draft.visualLimit).toBe(80);
     expect(draft.audioLimit).toBe(100);
   });

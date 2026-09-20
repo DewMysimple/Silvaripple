@@ -8,13 +8,17 @@ export const formatBytes = (value = 0) => {
   return `${(value / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
 };
 
-export const formatDate = (value?: string) =>
+export const formatDate = (
+  value?: string,
+  options: Intl.DateTimeFormatOptions = {},
+) =>
   value
     ? new Intl.DateTimeFormat("zh-CN", {
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
+        ...options,
       }).format(new Date(value))
     : "无时间记录";
 

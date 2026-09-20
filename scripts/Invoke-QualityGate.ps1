@@ -28,10 +28,14 @@ try {
     }
     corepack pnpm@10.34.5 --dir frontend test
     Assert-ExitCode "React tests"
+    corepack pnpm@10.34.5 --dir frontend format:check
+    Assert-ExitCode "Frontend formatting"
     corepack pnpm@10.34.5 --dir frontend typecheck
     Assert-ExitCode "TypeScript typecheck"
     corepack pnpm@10.34.5 --dir frontend build
     Assert-ExitCode "React production build"
+    corepack pnpm@10.34.5 --dir frontend test:e2e
+    Assert-ExitCode "Workbench browser regression"
 
     cargo fmt --manifest-path frontend/src-tauri/Cargo.toml -- --check
     Assert-ExitCode "Rust formatting"

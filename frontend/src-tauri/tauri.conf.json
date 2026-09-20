@@ -28,13 +28,7 @@
     }
   },
   "bundle": {
-    "active": true,
-    "targets": ["nsis"],
-    "icon": ["../../packaging/ChatWechat.ico"],
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser"
-      }
-    }
+    "active": false,
+    "icon": ["../../packaging/ChatWechat.ico"]
   }
 }

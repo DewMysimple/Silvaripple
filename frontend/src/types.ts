@@ -28,7 +28,15 @@ export interface Account {
 }
 export interface DataRootCandidate {
   path: string;
-  source: "saved" | "registry" | "documents" | "profile" | "onedrive" | "appdata" | "drive" | string;
+  source:
+    | "saved"
+    | "registry"
+    | "documents"
+    | "profile"
+    | "onedrive"
+    | "appdata"
+    | "drive"
+    | string;
   account_count: number;
   latest_database_write?: string;
   selected: boolean;

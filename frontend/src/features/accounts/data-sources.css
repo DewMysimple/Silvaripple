@@ -1,0 +1,97 @@
+.data-source-picker {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.data-source-current {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+.data-source-current > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+  color: var(--muted);
+}
+.data-source-current code {
+  display: block;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.data-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.data-source-help,
+.data-source-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.data-source-empty {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+.data-source-results {
+  display: grid;
+  gap: 8px;
+}
+.data-source-caption {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 2px;
+}
+.data-source-option {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+.data-source-option:hover,
+.data-source-option.selected {
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border));
+  background: var(--green-soft);
+}
+.data-source-option.selected:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.data-source-option > svg {
+  color: var(--green-text);
+}
+.data-source-option > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.data-source-option strong {
+  font-size: 0.95rem;
+}
+.data-source-option small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.data-source-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--green-text);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}

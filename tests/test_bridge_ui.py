@@ -113,55 +113,14 @@ def test_bridge_contract_and_ui_assets():
     html = (frontend.parent / "index.html").read_text(encoding="utf-8")
     bridge_source = (frontend / "bridge.ts").read_text(encoding="utf-8")
     tauri_config = (frontend.parent / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8")
-    source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted(frontend.rglob("*.tsx"))
-    )
     assert "invokeTauri" in bridge_source and "@tauri-apps/api/core" in bridge_source
     assert "pywebview" not in bridge_source
     assert "ChatWechat 本地微信导出" in tauri_config
-    assert "开始导出" in source and "允许数据库覆盖不完整" in source
-    assert "allow_legacy_http_media" in source
-    assert "download_missing_media_default" in source
-    assert "私聊与群聊" in source and '<option value="official">' not in source
-    assert "ResizeObserver" in source and "olderAnchor" in source
-    assert "ensureSelected(activeConversation.conversation_id)" in source
-    assert "加入导出" in source
-    assert "visual_download_limit_mib" in source
-    assert "实时导出检查" in source and "导出会话列表" in source
-    assert "扫描全部私聊与群聊" in source and "逐会话统计" in source
-    assert "应用导出预设" not in source and "预计生成" not in source
-    assert "高级选项" in source and "目录已移动" in source
-    assert "window.setTimeout(() => void pumpEstimate(), 600)" in source
-    assert "计算导出规模" not in source
-    assert "打开导出目录" in source and "我已在微信中打开，重新检测" in source
-    store_source = (frontend / "store.ts").read_text(encoding="utf-8")
-    assert "exportDraft" in store_source and "exportOperationId" in store_source
-    assert "mediaScanOperationId" in store_source and "startMediaScan" in store_source
-    assert "last_account_id" in store_source
-    assert "正在刷新本地媒体状态" in source
-    assert "account.avatar_data_url" in source
-    assert "account-switcher" in source and "检测到的微信数据" in source
-    assert "浏览并选择聊天" in source and "整理导出范围" in source and "检查媒体可用性" in source
-    assert "workbench-launches" in source and "account-overview" in source
-    assert "clear_abnormal_operation_history" in source
-    assert "ConfirmDialog" in source and "window.confirm" not in source
-    assert "清空异常记录" in source and "清空全部记录" in source
-    assert "secondary-workbenches" not in source
-    assert "类媒体告警" not in source
+    assert "import.meta.env.DEV" in bridge_source
     assert "http://" not in html and "https://" not in html
-    styles = (frontend / "styles.css").read_text(encoding="utf-8")
-    assert ".conversation-list { min-height: 0" in styles
-    assert ".messages { min-height: 0" in styles
-    assert "grid-template-columns: minmax(0,1fr) 18px" in styles
-    assert ".global-search .primary" in styles and "white-space: nowrap" in styles
-    assert ".bubble { width: fit-content" in styles
-    assert ".home-page { max-width: 1440px" in styles
-    assert ".workbench-launches { display: grid" in styles
-    assert "grid-template-columns: repeat(3,minmax(0,1fr))" in styles
-    assert ".action-menu" in styles and ".confirm-dialog" in styles
-    assert "button:active { scale: .96; }" in styles
-    assert ".account-statistics-panel" in styles and ".rich-history" in styles
+    # Interaction, typography and account isolation are exercised by the React
+    # and browser suites. Python checks the desktop contract, not page copy or
+    # CSS serialization: those legitimately change during a UI redesign.
 
 
 def test_history_health_relink_and_metadata_delete(tmp_path):

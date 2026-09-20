@@ -4,14 +4,19 @@
   "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@10.34.5",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "format": "prettier --write src e2e *.ts *.json",
+    "format:check": "prettier --check src e2e *.ts *.json",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build --config src-tauri/tauri.bundle.conf.json"
+    "desktop:build": "tauri build --no-bundle --config src-tauri/tauri.bundle.conf.json"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
@@ -23,12 +28,14 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tauri-apps/cli": "2.11.4",
     "@types/node": "24.10.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.3",
     "jsdom": "29.1.1",
+    "prettier": "3.9.8",
     "typescript": "6.0.3",
     "vite": "8.1.4",
     "vitest": "4.1.10"
