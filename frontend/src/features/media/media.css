@@ -32,7 +32,7 @@
   cursor: pointer;
 }
 .media-scope button.selected {
-  background: var(--green-soft);
+  background: var(--selection);
   border-color: var(--green);
 }
 .media-scope span {
@@ -128,8 +128,8 @@
   width: fit-content;
   padding: 5px 9px;
   border-radius: 6px;
-  color: var(--green-text);
-  background: var(--green-soft);
+  color: var(--muted);
+  background: var(--surface-soft);
   font-size: 0.8rem;
 }
 .media-no-issues {
@@ -147,7 +147,7 @@
   align-items: center;
   gap: 20px;
   padding: 24px;
-  background: var(--green-soft);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }

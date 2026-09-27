@@ -14,7 +14,7 @@ export function PageIntro({
   return (
     <div className="page-intro">
       <div>
-        {eyebrow && <span className="eyebrow green">{eyebrow}</span>}
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>

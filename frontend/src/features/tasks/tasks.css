@@ -108,7 +108,7 @@
   box-shadow: inset 3px 0 var(--warning);
 }
 .history-row.is-selected {
-  background: var(--green-soft);
+  background: var(--selection);
 }
 .history-checkbox {
   display: grid;

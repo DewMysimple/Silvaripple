@@ -76,7 +76,7 @@ p {
   background: var(--surface);
 }
 .secondary:hover {
-  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+  border-color: var(--border-strong);
   background: var(--surface-hover);
 }
 .compact {
@@ -171,8 +171,8 @@ p {
 .avatar-fallback {
   display: grid;
   place-items: center;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-hover);
+  color: var(--muted);
   font-weight: 700;
 }
 .check {
@@ -215,8 +215,8 @@ p {
   place-items: center;
   margin-bottom: 16px;
   border-radius: 18px;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-soft);
+  color: var(--muted);
 }
 .empty-state strong {
   font-size: 1.13rem;
@@ -305,8 +305,8 @@ p {
   cursor: pointer;
 }
 .choice-chips button.active {
-  border-color: color-mix(in srgb, var(--green) 40%, var(--border));
-  background: var(--green-soft);
+  border-color: var(--green);
+  background: var(--surface);
   color: var(--green-text);
 }
 .green-switch {
@@ -482,7 +482,6 @@ p {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 2px 4px rgba(20, 45, 32, 0.015);
 }
 .panel-heading {
   display: flex;
@@ -522,7 +521,7 @@ p {
   white-space: nowrap;
 }
 .status-badge.success {
-  background: var(--green-soft);
+  background: var(--surface-soft);
   color: var(--green-text);
 }
 .status-badge.warning {

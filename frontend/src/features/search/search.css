@@ -20,7 +20,7 @@
   box-shadow: 0 0 0 3px var(--green-soft);
 }
 .global-search > svg {
-  color: var(--green-text);
+  color: var(--muted);
   flex: 0 0 auto;
 }
 .global-search input {

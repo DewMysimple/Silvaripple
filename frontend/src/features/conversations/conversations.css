@@ -93,7 +93,7 @@
   background: var(--surface-soft);
 }
 .conversation-row.is-active {
-  background: var(--green-soft);
+  background: var(--selection);
 }
 .conversation-row img {
   width: 40px;
@@ -208,8 +208,8 @@
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  background: #9bafa6;
-  color: white;
+  background: var(--surface-hover);
+  color: var(--muted);
   font-size: 0.8rem;
   overflow: hidden;
 }

@@ -64,15 +64,15 @@
 }
 .data-source-option:hover,
 .data-source-option.selected {
-  border-color: color-mix(in srgb, var(--green) 35%, var(--border));
-  background: var(--green-soft);
+  border-color: var(--border-strong);
+  background: var(--selection);
 }
 .data-source-option.selected:disabled {
   opacity: 1;
   cursor: default;
 }
 .data-source-option > svg {
-  color: var(--green-text);
+  color: var(--muted);
 }
 .data-source-option > span:nth-child(2) {
   min-width: 0;

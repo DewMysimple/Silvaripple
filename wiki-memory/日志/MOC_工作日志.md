@@ -3,7 +3,7 @@ type: moc
 status: active
 kind: process
 importance: high
-updated: 2026-09-21
+updated: 2026-09-27
 topic: work-log-index
 source_logs: []
 supersedes: null
@@ -13,6 +13,7 @@ supersedes: null
 
 | 时间 | 类型 | 目标 | 状态 | 主题 | 日志 |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-27 | ui | - | archived | neutral-workbench-palette | [[日志/2026-09-27-工作台中性色与简洁配色|工作台中性色与简洁配色]] |
 | 2026-09-21 | ui | - | active | workbench-redesign-portable-delivery | [[日志/2026-09-20-全局工作台重设计与免安装交付|全局工作台重设计与免安装交付]] |
 | 2026-09-17 | bug | - | archived | windows-powershell-script-encoding | [[日志/2026-09-17-Windows-PowerShell发布脚本编码兼容|2026-09-17｜Windows PowerShell 发布脚本编码兼容]] |
 | 2026-09-17 | architecture | - | archived | tauri-migration-and-account-discovery | [[日志/2026-09-16-Tauri架构与多账号数据发现|2026-09-16｜Tauri 架构与多账号数据发现]] |

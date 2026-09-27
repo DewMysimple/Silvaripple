@@ -9,13 +9,9 @@
   grid-template-columns: minmax(0, 1fr) minmax(245px, 0.36fr);
   gap: 32px;
   padding: 30px;
-  border: 1px solid color-mix(in srgb, var(--green) 14%, var(--border));
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  background: linear-gradient(
-    115deg,
-    var(--surface),
-    color-mix(in srgb, var(--green-soft) 65%, var(--surface))
-  );
+  background: var(--surface-soft);
 }
 .home-welcome-copy {
   min-width: 0;
@@ -32,8 +28,8 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-hover);
+  color: var(--muted);
   border-radius: 13px;
   font-size: 1.3rem;
   font-weight: 700;
@@ -86,7 +82,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-left: 30px;
-  border-left: 1px solid color-mix(in srgb, var(--green) 14%, var(--border));
+  border-left: 1px solid var(--border);
 }
 .home-readiness-icon {
   display: inline-flex;
@@ -164,7 +160,8 @@
   cursor: pointer;
 }
 .home-shortcuts > button:hover {
-  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
 }
 .home-shortcut-icon {
   display: grid;
@@ -172,8 +169,8 @@
   width: 46px;
   height: 46px;
   border-radius: 12px;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-soft);
+  color: var(--muted);
 }
 .home-shortcuts strong {
   font-size: 1.05rem;
@@ -185,7 +182,7 @@
   line-height: 1.55;
 }
 .home-shortcuts > button > svg {
-  color: var(--green-text);
+  color: var(--muted);
 }
 .home-insights-grid {
   display: grid;
@@ -261,7 +258,7 @@
   display: block;
   height: 100%;
   min-width: 3px;
-  background: color-mix(in srgb, var(--green) 72%, var(--surface));
+  background: var(--faint);
   border-radius: inherit;
 }
 .home-message-bars b {
@@ -478,8 +475,8 @@
   height: 60px;
   width: 60px;
   border-radius: 17px;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-soft);
+  color: var(--muted);
   margin-bottom: 20px;
 }
 .home-setup-heading h2 {

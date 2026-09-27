@@ -164,8 +164,8 @@
   color: var(--text);
 }
 .nav-item.is-active {
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface);
+  color: var(--text);
   font-weight: 650;
 }
 .nav-item.is-active::before {
@@ -333,8 +333,8 @@
   place-items: center;
   overflow: hidden;
   border-radius: 9px;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-soft);
+  color: var(--muted);
   font-weight: 700;
 }
 .account-switcher-avatar img {

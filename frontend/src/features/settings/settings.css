@@ -50,9 +50,11 @@
   background: var(--surface-soft);
 }
 .settings-navigation button.selected {
-  background: var(--green-soft);
+  background: var(--selection);
+  color: var(--text);
+}
+.settings-navigation button.selected > svg {
   color: var(--green-text);
-  border-color: color-mix(in srgb, var(--green) 15%, transparent);
 }
 .settings-navigation button span {
   display: grid;
@@ -107,7 +109,7 @@
   background: var(--surface);
 }
 .account-settings-card.current {
-  border-color: color-mix(in srgb, var(--green) 35%, var(--border));
+  border-color: var(--border-strong);
 }
 .account-settings-identity {
   display: flex;
@@ -121,8 +123,8 @@
   height: 43px;
   border-radius: 11px;
   overflow: hidden;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-soft);
+  color: var(--muted);
   font-size: 1.2rem;
   font-weight: 700;
 }
@@ -221,8 +223,8 @@
   flex: 0 0 45px;
   height: 45px;
   border-radius: 12px;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface);
+  color: var(--text);
   font-size: 1.15rem;
   font-weight: 650;
 }
@@ -290,14 +292,14 @@
   cursor: pointer;
 }
 .settings-layout-options > button:hover {
-  border-color: var(--green);
+  border-color: var(--border-strong);
 }
 .settings-layout-options > button.selected {
-  background: var(--green-soft);
-  border-color: color-mix(in srgb, var(--green) 50%, var(--border));
+  background: var(--selection);
+  border-color: var(--border-strong);
 }
 .settings-layout-option-icon {
-  color: var(--green-text);
+  color: var(--muted);
   margin-bottom: 3px;
 }
 .settings-layout-options strong {
@@ -386,8 +388,8 @@
   flex: 0 0 45px;
   height: 45px;
   border-radius: 12px;
-  background: var(--green-soft);
-  color: var(--green-text);
+  background: var(--surface-soft);
+  color: var(--muted);
 }
 .settings-privacy-list strong {
   display: block;
